@@ -1,59 +1,51 @@
 on run argv
     set targetEmail to item 1 of argv
-    set emailList to {} -- This will store the final formatted strings
-    set collectedMessages to {} -- This will temporarily store message objects
+    set emailList to {}
+    set collectedMessages to {}
     
-    	tell application "Microsoft Outlook"
-		-- Get messages where the sender or recipient matches the target email
-		-- We iterate through ALL mail folders named "Inbox" to ensure we cover all accounts
-		
+    tell application "Microsoft Outlook"
 		try
 			set allInboxes to every mail folder where name is "Inbox"
-			-- For sent items, we should also check "Sent Items" across accounts
-			set allSentItems to every mail folder where name is "Sent Items"
 			
-			set targetFolders to allInboxes & allSentItems
-			
-			repeat with currentFolder in targetFolders
+			repeat with currentFolder in allInboxes
 				try
-					-- Search in this folder
-					-- Note: Direct filtering on folder objects can be slow or finicky in AppleScript
-					-- We try to use a 'where' clause on the messages of the folder
+				    set msgCount to count of messages of currentFolder
+				    
+				    -- Limit scan to recent 500 messages for performance
+				    set scanLimit to 500
+				    set startIndex to 1
+				    if msgCount > scanLimit then
+				        set startIndex to msgCount - scanLimit + 1
+				    end if
+				    
+				    if msgCount > 0 then
+    				    repeat with i from msgCount to startIndex by -1
+    				        try
+    				            set msg to message i of currentFolder
+    				            set matchFound to false
+    				            
+    				            -- Check Sender
+    				            set msgSender to sender of msg
+    				            set senderAddress to address of msgSender
+    				            if senderAddress contains targetEmail then
+    				                set matchFound to true
+    				            end if
+    				            
+    				            if matchFound then
+    				                set end of collectedMessages to msg
+    				            end if
+    				            
+    				        on error loopErr
+    				            -- Ignore single message error
+    				        end try
+    				    end repeat
+    				end if
 					
-					-- (*** ERROR: "recipient's email address" might be invalid syntax for some versions, simplified below ***)
-					-- Actually, let's keep it simple and consistent with the original logic but iterated
-					-- Original: set incomingMessages to (every message of inbox where its sender's address contains targetEmail)
-					
-					-- Refined Iteration:
-					-- Check incoming (in Inboxes)
-					if name of currentFolder is "Inbox" then
-						set folderMatches to (every message of currentFolder where its sender's address contains targetEmail)
-						set collectedMessages to collectedMessages & folderMatches
-					end if
-					
-					-- Check outgoing (in Sent Items)
-					if name of currentFolder is "Sent Items" then
-						-- Filter by recipient is harder because 'recipient' is a list.
-						-- Simplified: Just get all messages and filter in loop? No, too slow.
-						-- Let's try to just get messages and we'll filter in the processing loop if needed, 
-						-- OR assume if we are in Sent Items and we are searching for a user, we want emails TO them.
-						-- AppleScript filter: where its recipient's generic email address ... (hard to get right)
-						-- Let's just grab "every message" if it's small, or skip Sent Items for now if risk is high.
-						-- Original script tried: (every message of sent mail folder where (its recipient's email address contains targetEmail))
-						-- "sent mail folder" is a property of application/account.
-						
-						-- Let's stick to INBOX for now as that's the primary "unread" use case.
-						-- The original script actually did `set incomingMessages` and `set outgoingMessages`.
-						-- If I can't easily filter Sent Items by recipient list, I'll omit it or do a raw loop if checking specific conversation coverage.
-						-- Given the complexity, let's just do Inboxes for this pass to match recent_threads fix.
-					end if
-					
-				on error
-					-- Continue scanning other folders
+				on error errMsg
+					-- Ignore folder error
 				end try
 			end repeat
 			
-			-- Process the collected message objects
 			repeat with msg in collectedMessages
 				try
 					set msgSender to sender of msg
@@ -64,7 +56,7 @@ on run argv
 					
 					set end of emailList to msgSenderAddress & "|||" & msgSubject & "|||" & msgDate & "|||" & msgContent & "///END_OF_EMAIL///"
 				on error
-					-- Skip bad msg
+				    -- Skip bad parse
 				end try
 			end repeat
 			

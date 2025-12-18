@@ -7,7 +7,7 @@ on run argv
         set newInfo to {subject:msgSubject, content:msgContent}
         set newMsg to make new outgoing message with properties newInfo
         make new recipient at newMsg with properties {email address:{address:recipientAddress}}
-        save newMsg -- Saves to Drafts
+        open newMsg -- Opens the draft for review instead of trying to save silently
     end tell
     
     return "Draft created"

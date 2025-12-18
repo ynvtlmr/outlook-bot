@@ -17,13 +17,34 @@ def parse_date(date_str):
     # For this MVP, let's try a fuzzy parser or standard formats.
     # Actually, let's update get_emails.scpt to return ISO format if possible, but AppleScript is notoriously bad at that.
     # We'll try dateutil if available, otherwise strict format.
+    # AppleScript format: "Monday, October 15, 2018 at 5:05:57 AM"
+    # Note: The space before AM/PM might be a narrow non-breaking space (U+202F) on modern macOS
+    
+    clean_date_str = date_str.replace('\u202F', ' ').strip()
+    
+    # Try common formats
+    formats = [
+        "%A, %B %d, %Y at %I:%M:%S %p", # Standard verbose
+        "%A, %B %d, %Y at %H:%M:%S",    # 24-hour?
+        "%Y-%m-%d %H:%M:%S"             # Fallback
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(clean_date_str, fmt)
+        except ValueError:
+            continue
+
+    # Try dateutil if available as a last resort
     try:
         from dateutil import parser
         return parser.parse(date_str)
     except ImportError:
-        # Fallback: simple exact match if we knew the format, or just return current time (debug)
-        print(f"Warning: dateutil not installed. Cannot parse date: {date_str}")
-        return datetime.now() 
+        pass
+        
+    print(f"Warning: Could not parse date: '{date_str}' (cleaned: '{clean_date_str}')")
+    # Default to now so we don't spam if we can't tell the date
+    return datetime.now() 
 
 def check_and_respond():
     client = OutlookClient(APPLESCRIPTS_DIR)
