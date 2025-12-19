@@ -17,7 +17,7 @@ def main():
     # 2. Scrape Threads
     try:
         # Run both modes to cover all bases
-        run_scraper(mode='recent')
+        # run_scraper(mode='recent')
         print("\n" + "="*30 + "\n")
         run_scraper(mode='flagged')
     except Exception as e:

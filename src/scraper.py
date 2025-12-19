@@ -42,6 +42,8 @@ def parse_raw_data(raw_data):
                     msg['date'] = line[6:].strip()
                 elif line.startswith("Subject: "):
                     msg['subject'] = line[9:].strip()
+                elif line.startswith("FlagStatus: "):
+                    msg['flag_status'] = line[12:].strip()
         
         msg['content'] = "\n".join(content_lines)
         
@@ -110,18 +112,19 @@ def scrape_messages(script_name, file_prefix="thread"):
                 f.write(f"From: {msg.get('from')}\n")
                 f.write(f"Date: {msg.get('date')}\n")
                 f.write(f"Subject: {msg.get('subject')}\n")
+                f.write(f"Flag Status: {msg.get('flag_status', 'None')}\n")
                 f.write("-" * 20 + "\n")
                 f.write(msg.get('content') + "\n")
                 f.write("=" * 80 + "\n\n")
         
-    print(f"Successfully saved {len(top_threads)} threads to {OUTPUT_DIR}")
+    print(f"Successfully saved {len(top_threads)} threads to {os.path.abspath(OUTPUT_DIR)}")
 
 def run_scraper(mode='recent'):
     if mode == 'recent':
         print("--- Scraping Recent Emails ---")
         scrape_messages('get_recent_threads.scpt', file_prefix="recent")
     elif mode == 'flagged':
-        print("--- Scraping Flagged Emails ---")
-        scrape_messages('get_flagged_emails.scpt', file_prefix="flagged")
+        print("--- Scraping Flagged Emails (Full Threads) ---")
+        scrape_messages('get_flagged_threads.scpt', file_prefix="flagged")
     else:
         print(f"Unknown mode: {mode}")

@@ -8,7 +8,9 @@ tell application "Microsoft Outlook"
 		try
 		    -- Find flagged messages in this folder
 		    -- Note: 'todo flag' is the property. 'status' can be 'flagged' or 'completed'.
-			set flaggedMessages to (every message of currentFolder where todo flag is marked)
+			-- Changed from 'is marked' to 'is not not flagged' to catch all states, then we can filter if needed.
+			-- However, purely 'not not flagged' is safest for discovery. 
+			set flaggedMessages to (every message of currentFolder where todo flag is not not flagged)
 			
 			repeat with msg in flaggedMessages
 				try
