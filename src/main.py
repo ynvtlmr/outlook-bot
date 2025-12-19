@@ -1,9 +1,9 @@
 import sys
-from client_detector import get_outlook_version
+from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
 
 from config import APPLESCRIPTS_DIR
-from outlook_client import OutlookClient
+
 import re
 from datetime import datetime
 
