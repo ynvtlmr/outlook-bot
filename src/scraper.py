@@ -69,17 +69,22 @@ def group_into_threads(messages):
         
     return list(threads_map.values())
 
-def run_scraper():
+def scrape_messages(script_name, file_prefix="thread"):
+    """
+    Generic function to run a scraping script and save the results.
+    """
     client = OutlookClient(APPLESCRIPTS_DIR)
     
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
         
-    print("Fetching recent emails from Outlook...")
-    # We call the new script manually here since it's not in the old client wrapper yet
-    # Or we can just use the _run_script method.
-    raw_data = client._run_script('get_recent_threads.scpt')
-    
+    print(f"Running {script_name}...")
+    try:
+        raw_data = client._run_script(script_name)
+    except Exception as e:
+        print(f"Error executing AppleScript: {e}")
+        return
+
     if not raw_data:
         print("No data returned from Outlook.")
         return
@@ -90,18 +95,14 @@ def run_scraper():
     threads = group_into_threads(messages)
     print(f"Identified {len(threads)} unique threads.")
     
-    # Sort threads by most recent message in them?
-    # For now, let's just take the first 10 encountered (since we scraped from newest)
-    # Ideally we sort by the date of the newest message in the thread.
-    
-    # Limit to 10
-    top_threads = threads[:10]
+    # Save first 50 threads
+    top_threads = threads[:50]
     
     for i, thread in enumerate(top_threads):
         # Determine filename from subject of the first message
         first_msg = thread[0]
         safe_subject = "".join([c for c in first_msg.get('subject', 'thread') if c.isalnum() or c in (' ', '-', '_')]).strip()[:50]
-        filename = f"thread_{i+1}_{safe_subject}.txt"
+        filename = f"{file_prefix}_{i+1}_{safe_subject}.txt"
         filepath = os.path.join(OUTPUT_DIR, filename)
         
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -114,3 +115,13 @@ def run_scraper():
                 f.write("=" * 80 + "\n\n")
         
     print(f"Successfully saved {len(top_threads)} threads to {OUTPUT_DIR}")
+
+def run_scraper(mode='recent'):
+    if mode == 'recent':
+        print("--- Scraping Recent Emails ---")
+        scrape_messages('get_recent_threads.scpt', file_prefix="recent")
+    elif mode == 'flagged':
+        print("--- Scraping Flagged Emails ---")
+        scrape_messages('get_flagged_emails.scpt', file_prefix="flagged")
+    else:
+        print(f"Unknown mode: {mode}")

@@ -16,7 +16,10 @@ def main():
     
     # 2. Scrape Threads
     try:
-        run_scraper()
+        # Run both modes to cover all bases
+        run_scraper(mode='recent')
+        print("\n" + "="*30 + "\n")
+        run_scraper(mode='flagged')
     except Exception as e:
         print(f"Error during scraping: {e}")
         import traceback
