@@ -30,15 +30,21 @@ A powerful macOS automation tool for Microsoft Outlook, designed to streamline e
 ```
 outlook-bot/
 ├── config/
-│   ├── users.csv          # List of contacts to monitor for the Responder module
-│   └── ...
+│   └── users.csv          # List of contacts to monitor (name, email)
 ├── src/
 │   ├── main.py            # Primary entry point (Scraping + Flagged Auto-Response)
 │   ├── responder.py       # Relationship Manager entry point
 │   ├── scraper.py         # Logic for parsing and saving email threads
 │   ├── outlook_client.py  # Python wrapper for AppleScript execution
 │   └── apple_scripts/     # .scpt files for direct Outlook interaction
-└── output/                # Generated text dumps of email threads
+│       ├── create_draft.scpt
+│       ├── get_emails.scpt
+│       ├── get_flagged_threads.scpt
+│       ├── get_recent_threads.scpt
+│       ├── get_version.scpt
+│       └── reply_to_message.scpt
+├── output/                # Generated text dumps of email threads
+└── requirements.txt       # Python dependencies
 ```
 
 ## 📦 Setup & Usage
@@ -50,14 +56,14 @@ outlook-bot/
     ```
 
 2.  **Dependencies**:
-    The project uses standard libraries, but `python-dateutil` is recommended for robust date parsing.
+    Install the required Python packages:
     ```bash
-    pip install python-dateutil
+    pip install -r requirements.txt
     ```
 
 3.  **Configuration**:
-    *   **Responder**: Add contacts to `config/users.csv` (headers: `name,email`).
-    *   **Thresholds**: Edit `src/config.py` to change `DAYS_THRESHOLD` (default: 7).
+    *   **Responder**: Create `config/users.csv` with headers `name,email`.
+    *   **Thresholds**: Edit `src/config.py` to adjust `DAYS_THRESHOLD` (default: 7).
 
 4.  **Running the Bot**:
 
@@ -73,14 +79,36 @@ outlook-bot/
     ```
     *   Checks `users.csv` and drafts "Catching up" emails if needed.
 
-## ⚙️ How It Works
+## ⚙️ Architecture & Execution Logic
 
-The bot uses a "Bridge" pattern:
-1.  **Python** acts as the brain. It makes decisions, parses text, and attempts to group threads logically.
-2.  **AppleScript** acts as the hands. It performs the actual "heavy lifting" inside Outlook—fetching messages, reading flags, and creating windows/drafts.
+The bot operates on a **Bridge Pattern** between Python (logic) and AppleScript (interaction):
 
-### Why AppleScript?
-Microsoft Outlook for Mac does not have a comprehensive local API outside of AppleScript/JXA. This approach allows the bot to run locally on your machine without needing Exchange web credentials or API keys.
+### 1. Scraping & Flagged Response Flow (`main.py`)
+This is the main workflow for daily usage.
+1.  **Initialization**:
+    *   `main.py` starts and detects the Outlook client version using `get_version.scpt`.
+2.  **Scraping**:
+    *   Calls `scraper.run_scraper(mode='flagged')`.
+    *   Executes `get_flagged_threads.scpt` to fetch full conversation threads for any flagged items.
+    *   **Parsing**: Raw text from AppleScript is parsed in `scraper.py`, extracting headers and body content, and grouped into threads by Conversation ID or Subject.
+    *   Threads are saved to the `output/` directory for inspection.
+3.  **Auto-Drafting**:
+    *   `main.py` identifies threads with "Active" flags.
+    *   It sorts the thread to find the **latest message** (not necessarily the flagged one).
+    *   Calls `client.reply_to_message(...)` which executes `reply_to_message.scpt` to safely create a draft reply (no auto-send).
+
+### 2. Relationship Management Flow (`responder.py`)
+This workflow ensures you keep in touch with key contacts.
+1.  **Configuration**: Reads contacts from `config/users.csv`.
+2.  **Scanning**:
+    *   For each contact, executes `get_emails.scpt` to fetch recent communications.
+3.  **Decision**:
+    *   Calculates the days since the last email exchange.
+    *   If the gap exceeds `config.DAYS_THRESHOLD` (default: 7), it creates a "Catching up" draft using `create_draft.scpt`.
+
+### Technical Implementation
+*   **OutlookClient** (`src/outlook_client.py`): A Python wrapper that constructs and executes `osascript` commands.
+*   **AppleScript Bridge**: Since Outlook for Mac lacks a local Python API, AppleScript is used to interact with the UI and local database directly.
 
 ## ⚠️ Known Limitations
 
