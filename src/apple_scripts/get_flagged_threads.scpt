@@ -74,7 +74,6 @@ tell application "Microsoft Outlook"
 				
 				-- Check for duplicates? For now assume folders don't overlap messages much (except copies)
 				
-				-- Get Flag Status
 				set flagStatusRaw to todo flag of msg
 				set flagStatus to "None"
 				if flagStatusRaw is not completed then
@@ -83,7 +82,9 @@ tell application "Microsoft Outlook"
 					set flagStatus to "Completed"
 				end if
 				
-				set entry to "ID: " & cID & "\n" & "From: " & senderName & " <" & senderAddress & ">\n" & "Date: " & msgDate & "\n" & "Subject: " & msgSubject & "\n" & "FlagStatus: " & flagStatus & "\n" & "---BODY_START---\n" & msgContent & "\n---BODY_END---"
+				set msgID to id of msg
+				
+				set entry to "ID: " & cID & "\n" & "MessageID: " & msgID & "\n" & "From: " & senderName & " <" & senderAddress & ">\n" & "Date: " & msgDate & "\n" & "Subject: " & msgSubject & "\n" & "FlagStatus: " & flagStatus & "\n" & "---BODY_START---\n" & msgContent & "\n---BODY_END---"
 				
 				set end of msgList to entry
 			on error errMsg

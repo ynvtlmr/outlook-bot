@@ -31,3 +31,9 @@ class OutlookClient:
         Creates a draft email.
         """
         return self._run_script('create_draft.scpt', [to_address, subject, content])
+
+    def reply_to_message(self, message_id, content):
+        """
+        Replies to a specific message by ID, simulating 'Reply All'.
+        """
+        return self._run_script('reply_to_message.scpt', [str(message_id), content])
