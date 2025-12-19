@@ -46,23 +46,104 @@ on run argv
 			-- 2. Create Reply (This handles the 'From' account automatically)
 			set newDraft to reply to targetMsg
 			
-			-- 3. Simulate Reply All: Copy recipients
-			-- Get original recipients
+			-- Get my address/name to exclude from recipients
+			set myAddress to ""
+			set myName to ""
+			try
+			    set draftSender to sender of newDraft
+			    set myAddress to address of draftSender
+			    set myName to name of draftSender
+			on error
+			    -- If direct access fails, try account
+			    try
+			        set draftAccount to account of newDraft
+			        set myAddress to email address of draftAccount
+			        set myName to name of draftAccount
+			    on error
+			    end try
+			end try
+			
+			-- 2.5 CLEANUP: Remove "Me" from the implicitly created recipients
+			-- (This happens if we reply to a message we sent ourselves)
+			try
+			    set existingTo to to recipients of newDraft
+			    repeat with r in existingTo
+			        try
+			             if (address of (get email address of r) is equal to myAddress) or (name of r is equal to myName) then
+			                delete r
+			             end if
+			        on error
+			        end try
+			    end repeat
+			    
+			    -- Same for CC? Usually 'reply' doesn't add CC, but good safety
+			    set existingCC to cc recipients of newDraft
+			    repeat with r in existingCC
+			         try
+			             if (address of (get email address of r) is equal to myAddress) or (name of r is equal to myName) then
+			                delete r
+			             end if
+			        on error
+			        end try
+			    end repeat
+			on error
+			end try
+			
+			
+			-- 3. Simulate Reply All: Copy recipients from TARGET message
 			set origTo to to recipients of targetMsg
 			set origCC to cc recipients of targetMsg
-			set origSender to sender of targetMsg
-			
-			-- Add original sender to 'To' (if not already there - Outlook 'reply' does this usually, but let's ensure)
-			-- Actually 'reply' puts the sender in 'To'. We just need to add the others.
 			
 			repeat with r in origTo
-			    set rawAddr to address of (get email address of r)
-			    make new to recipient at newDraft with properties {email address:{address:rawAddr}}
+			    try
+			        set rawAddr to address of (get email address of r)
+			        set rawName to "Unknown"
+			        try 
+			            set rawName to name of r
+			        end try
+			        
+			        if rawAddr is not equal to myAddress and rawName is not equal to myName then
+			            -- Check if already exists in draft? (Avoid duplicates if Native Reply added them correctly)
+			            -- Simplest: Try adding. Outlook allows dups. 
+			            -- Let's check existence to be clean.
+			            set alreadyExists to false
+			            repeat with ex in (to recipients of newDraft)
+			                if (address of (get email address of ex) is equal to rawAddr) then
+			                    set alreadyExists to true
+			                end if
+			            end repeat
+			            
+			            if not alreadyExists then
+			                make new to recipient at newDraft with properties {email address:{address:rawAddr}}
+			            end if
+			        end if
+			    on error e
+			        -- log error?
+			    end try
 			end repeat
 			
 			repeat with r in origCC
-			     set rawAddr to address of (get email address of r)
-			     make new cc recipient at newDraft with properties {email address:{address:rawAddr}}
+			     try
+			         set rawAddr to address of (get email address of r)
+			         set rawName to "Unknown"
+			         try 
+			            set rawName to name of r
+			         end try
+			         
+			         if rawAddr is not equal to myAddress and rawName is not equal to myName then
+			             set alreadyExists to false
+			             repeat with ex in (cc recipients of newDraft)
+			                 if (address of (get email address of ex) is equal to rawAddr) then
+			                     set alreadyExists to true
+			                 end if
+			             end repeat
+			             
+			             if not alreadyExists then
+			                 make new cc recipient at newDraft with properties {email address:{address:rawAddr}}
+			             end if
+			         end if
+			     on error
+			     end try
 			end repeat
 			
 			-- 4. Set Content (Prepend)
