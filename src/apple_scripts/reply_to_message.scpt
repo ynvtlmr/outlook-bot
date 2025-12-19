@@ -1,6 +1,5 @@
 on run argv
 	set msgID to item 1 of argv
-	set responseBody to item 2 of argv
 	
 	tell application "Microsoft Outlook"
 		try
@@ -147,8 +146,9 @@ on run argv
 			end repeat
 			
 			-- 4. Set Content (Prepend)
-			set currentContent to content of newDraft
-			set content of newDraft to responseBody & "\n\n" & currentContent
+			-- 4. Set Content (Prepend) - REMOVED
+			-- set currentContent to content of newDraft
+			-- set content of newDraft to responseBody & "\n\n" & currentContent
 			
 			-- 5. Open it
 			open newDraft

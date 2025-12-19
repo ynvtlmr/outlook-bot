@@ -84,14 +84,8 @@ def main():
                     print(f"  -> Error: No Message ID found for target message.")
                     continue
                     
-                draft_body = (
-                    f"Hi,\n\n"
-                    f"I am following up on your email regarding '{subject}'.\n\n"
-                    f"Best,\n[Your Name]"
-                )
-                
                 try:
-                    result = client.reply_to_message(msg_id, draft_body)
+                    result = client.reply_to_message(msg_id)
                     print(f"  -> {result}")
                 except Exception as e:
                     print(f"  -> Failed to create draft: {e}")
