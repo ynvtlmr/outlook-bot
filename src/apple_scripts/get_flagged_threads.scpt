@@ -2,7 +2,7 @@ tell application "Microsoft Outlook"
 	set msgList to {}
 	set visitedIDs to {}
 	
-	-- 1. Find all flagged messages (Active or Completed)
+	-- 1. Find all flagged messages (Active only) -- Logic updated to filter in loop
 	-- We look in all folders or just key ones? Scanning all folders is slow.
 	-- Let's stick to the previous logic of scanning all folders to FIND the flags.
 	
@@ -14,9 +14,11 @@ tell application "Microsoft Outlook"
 			set foundMessages to (every message of currentFolder where todo flag is not not flagged)
 			repeat with msg in foundMessages
 				try
-					set cID to conversation id of msg
-					if cID is not in flaggedConversationIDs then
-						set end of flaggedConversationIDs to cID
+					if todo flag of msg is not completed then
+						set cID to conversation id of msg
+						if cID is not in flaggedConversationIDs then
+							set end of flaggedConversationIDs to cID
+						end if
 					end if
 				on error
 					-- skip if no conversation id
@@ -76,10 +78,10 @@ tell application "Microsoft Outlook"
 				
 				set flagStatusRaw to todo flag of msg
 				set flagStatus to "None"
-				if flagStatusRaw is not completed then
-					set flagStatus to "Active"
-				else if flagStatusRaw is completed then
+				if flagStatusRaw is completed then
 					set flagStatus to "Completed"
+				else if flagStatusRaw is not not flagged then
+					set flagStatus to "Active"
 				end if
 				
 				set msgID to id of msg
