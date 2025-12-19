@@ -39,7 +39,15 @@ def parse_raw_data(raw_data):
                 elif line.startswith("From: "):
                     msg['from'] = line[6:].strip()
                 elif line.startswith("Date: "):
-                    msg['date'] = line[6:].strip()
+                    date_str = line[6:].strip()
+                    msg['date'] = date_str
+                    try:
+                        # Attempt to parse date for sorting
+                        from dateutil import parser
+                        msg['timestamp'] = parser.parse(date_str)
+                    except:
+                        # Fallback: Use current time or min time to keep format valid
+                        msg['timestamp'] = datetime.min
                 elif line.startswith("Subject: "):
                     msg['subject'] = line[9:].strip()
                 elif line.startswith("FlagStatus: "):

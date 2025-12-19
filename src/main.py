@@ -5,6 +5,7 @@ from scraper import run_scraper
 from config import APPLESCRIPTS_DIR
 from outlook_client import OutlookClient
 import re
+from datetime import datetime
 
 def main():
     print("--- Outlook Bot Generic Scraper ---")
@@ -33,32 +34,27 @@ def main():
             client = OutlookClient(APPLESCRIPTS_DIR)
             
             for i, thread in enumerate(flagged_threads):
-                # Deduplication: Find the LATEST message with 'Active' flag
-                # Threads are typically chronological or reverse chronological depending on Outlook. 
-                # Let's assume we want to reply to the *latest* message in the conversation that is flagged,
-                # OR the *latest* message in the conversation period, using the context of the flag?
-                # User Requirement: "one draft per flagged active email thread"
+                # User Requirement: One draft per active thread.
+                # Must reply to the LATEST message in the thread, regardless of which one is flagged.
                 
-                active_msgs = [m for m in thread if m.get('flag_status') == 'Active']
+                # 1. Check if thread has ANY active flag
+                has_active_flag = any(m.get('flag_status') == 'Active' for m in thread)
                 
-                if not active_msgs:
+                if not has_active_flag:
                     continue
                     
-                # If multiple active flags, pick the one with most recent date?
-                # Parser date format is tricky. Let's rely on position if sorted? 
-                # Actually, scraper preserves order. Let's pick the last one in the list (assuming chronological) 
-                # or first (assuming reverse).
-                # Scraper output appends messages. `get_flagged_threads` loops folders. Order is not guaranteed absolute time.
-                # However, usually we want to reply to the specific message that IS flagged. 
-                # If multiple are flagged, we process the latest one found.
+                # 2. Sort messages by timestamp to find the latest
+                # (Scraper adds 'timestamp' datetime object)
+                sorted_thread = sorted(thread, key=lambda m: m.get('timestamp', datetime.min))
                 
-                target_msg = active_msgs[-1] # Pick the last one found
+                # 3. Target the very last message
+                target_msg = sorted_thread[-1]
                 
                 msg_id = target_msg.get('message_id')
                 subject = target_msg.get('subject', 'No Subject')
                 
                 if not msg_id:
-                    print(f"Skipping thread {i}: No Message ID found for active flag.")
+                    print(f"Skipping thread {i}: No Message ID found for target message.")
                     continue
                     
                 print(f"Drafting reply for Thread {i+1}: {subject} (ID: {msg_id})")
