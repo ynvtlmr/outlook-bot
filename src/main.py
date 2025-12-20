@@ -112,9 +112,14 @@ def main():
                         print("  -> Creating draft with generated reply...")
                         
                         # Prepare for HTML insertion
-                        # Sending RAW generated reply (with newlines, no HTML escaping) as per verified test case.
-                        # AppleScript wraps it in <p> which seems to handle it.
-                        result = client.reply_to_message(msg_id, generated_reply)
+                        # 1. Escape HTML special characters to prevent broken formatting/XSS
+                        html_safe_reply = html.escape(generated_reply)
+                        
+                        # 2. Convert newlines to HTML line breaks for proper rendering
+                        # Using <br> gives us precise control over line breaks without the extra margins of <p>
+                        formatted_reply = html_safe_reply.replace('\n', '<br>')
+                        
+                        result = client.reply_to_message(msg_id, formatted_reply)
                     else:
                         print("  -> Failed to generate reply (or empty). Creating empty draft.")
                         result = client.reply_to_message(msg_id)

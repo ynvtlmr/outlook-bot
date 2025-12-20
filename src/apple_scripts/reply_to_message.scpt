@@ -55,7 +55,7 @@ on run argv
 			        set oldContent to content of newDraft
 			        -- Convert newlines to BR?
 			        -- Simple replacement:
-			        set newContent to "<p>" & responseBody & "</p><br><br>" & oldContent
+			        set newContent to responseBody & "<br>" & oldContent
 			        set content of newDraft to newContent
 			    end if
 			on error e
