@@ -12,3 +12,16 @@ DAYS_THRESHOLD = 5
 OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
 USERS_FILE = os.path.join(BASE_DIR, 'config', 'users.csv')
 APPLESCRIPTS_DIR = os.path.join(BASE_DIR, 'src', 'apple_scripts')
+
+# AI Models
+AVAILABLE_MODELS = [
+    "gemini-3-flash",
+    "gemini-2.5-flash", 
+    "gemini-2.5-flash-lite"
+]
+
+# Parsing Delimiters
+MSG_DELIMITER = "\n///END_OF_MESSAGE///\n"
+BODY_START = "---BODY_START---"
+BODY_END = "---BODY_END---"
+

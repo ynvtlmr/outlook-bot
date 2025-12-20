@@ -3,9 +3,23 @@ from datetime import datetime
 try:
     from dateutil import parser
 except ImportError:
-    # We should probably handle this more gracefully if we can't install it,
-    # but for now we expect it to be there as it was used in previous scripts.
     import dateutil.parser as parser
+
+def parse_date_string(date_str):
+    """
+    Parses a single date string with cleaning for common Outlook/macOS oddities.
+    Returns datetime object or datetime.min on failure.
+    """
+    if not date_str:
+        return datetime.min
+        
+    # Clean narrow non-breaking spaces
+    clean_str = date_str.replace('\u202F', ' ').strip()
+    
+    try:
+        return parser.parse(clean_str)
+    except:
+        return datetime.min
 
 def extract_dates_from_text(text):
     """
@@ -28,28 +42,17 @@ def extract_dates_from_text(text):
 
     # Try specific patterns first
     for match in pattern1.finditer(text):
-        try:
-            date_str = match.group(1).replace('\u202F', ' ')
-            dates.append(parser.parse(date_str, fuzzy=True))
-        except:
-            pass
+        dates.append(parse_date_string(match.group(1)))
 
     for match in pattern2.finditer(text):
-        try:
-            date_str = match.group(1).replace('\u202F', ' ')
-            dates.append(parser.parse(date_str, fuzzy=True))
-        except:
-            pass
+        dates.append(parse_date_string(match.group(1)))
             
     # Also check every line that starts with Date:
     for match in pattern4.finditer(text):
-        try:
-            date_str = match.group(1).strip()
-            dates.append(parser.parse(date_str, fuzzy=True))
-        except:
-            pass
+        dates.append(parse_date_string(match.group(1)))
                 
-    return dates
+    # Filter out min dates
+    return [d for d in dates if d != datetime.min]
 
 def get_latest_date(text):
     """

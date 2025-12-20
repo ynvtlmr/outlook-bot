@@ -1,7 +1,8 @@
 import os
 import re
 from datetime import datetime
-from config import OUTPUT_DIR, APPLESCRIPTS_DIR
+from config import OUTPUT_DIR, APPLESCRIPTS_DIR, MSG_DELIMITER, BODY_START, BODY_END
+from date_utils import parse_date_string
 from outlook_client import OutlookClient
 
 def parse_raw_data(raw_data):
@@ -10,7 +11,7 @@ def parse_raw_data(raw_data):
     """
     messages = []
     # Split by message delimiter (added regex for robustness against newline variations)
-    raw_msgs = raw_data.split("\n///END_OF_MESSAGE///\n")
+    raw_msgs = raw_data.split(MSG_DELIMITER)
     
     for raw_msg in raw_msgs:
         if not raw_msg.strip():
@@ -24,10 +25,10 @@ def parse_raw_data(raw_data):
         in_body = False
         
         for line in lines:
-            if line.strip() == "---BODY_START---":
+            if line.strip() == BODY_START:
                 in_body = True
                 continue
-            if line.strip() == "---BODY_END---":
+            if line.strip() == BODY_END:
                 in_body = False
                 continue
                 
@@ -41,13 +42,7 @@ def parse_raw_data(raw_data):
                 elif line.startswith("Date: "):
                     date_str = line[6:].strip()
                     msg['date'] = date_str
-                    try:
-                        # Attempt to parse date for sorting
-                        from dateutil import parser
-                        msg['timestamp'] = parser.parse(date_str)
-                    except:
-                        # Fallback: Use current time or min time to keep format valid
-                        msg['timestamp'] = datetime.min
+                    msg['timestamp'] = parse_date_string(date_str)
                 elif line.startswith("Subject: "):
                     msg['subject'] = line[9:].strip()
                 elif line.startswith("FlagStatus: "):

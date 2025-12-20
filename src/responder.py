@@ -4,47 +4,7 @@ from datetime import datetime, timedelta
 from config import DAYS_THRESHOLD, USERS_FILE, APPLESCRIPTS_DIR
 from outlook_client import OutlookClient
 
-# We need a way to parse the dates from the scraped content or re-fetch.
-# Since we already have outlook_client methods, we can re-use the parsing logic or abstract it.
-# Ideally, we should have a shared utility to parse the email string.
-
-def parse_date(date_str):
-    # Outlook AppleScript usually returns date in a locale-dependent format or a standard one.
-    # Common format: "Friday, December 18, 2025 at 2:00:00 PM" or similar.
-    # This is tricky. Let's assume for now we can rely on standard python date parsing or string comparison
-    # If the AppleScript returns a date object, it converts to string.
-    # We might need to adjust the AppleScript to return ISO 8601 to be safe.
-    # For this MVP, let's try a fuzzy parser or standard formats.
-    # Actually, let's update get_emails.scpt to return ISO format if possible, but AppleScript is notoriously bad at that.
-    # We'll try dateutil if available, otherwise strict format.
-    # AppleScript format: "Monday, October 15, 2018 at 5:05:57 AM"
-    # Note: The space before AM/PM might be a narrow non-breaking space (U+202F) on modern macOS
-    
-    clean_date_str = date_str.replace('\u202F', ' ').strip()
-    
-    # Try common formats
-    formats = [
-        "%A, %B %d, %Y at %I:%M:%S %p", # Standard verbose
-        "%A, %B %d, %Y at %H:%M:%S",    # 24-hour?
-        "%Y-%m-%d %H:%M:%S"             # Fallback
-    ]
-    
-    for fmt in formats:
-        try:
-            return datetime.strptime(clean_date_str, fmt)
-        except ValueError:
-            continue
-
-    # Try dateutil if available as a last resort
-    try:
-        from dateutil import parser
-        return parser.parse(date_str)
-    except ImportError:
-        pass
-        
-    print(f"Warning: Could not parse date: '{date_str}' (cleaned: '{clean_date_str}')")
-    # Default to now so we don't spam if we can't tell the date
-    return datetime.now() 
+from scraper import parse_raw_data
 
 def check_and_respond():
     client = OutlookClient(APPLESCRIPTS_DIR)
@@ -71,20 +31,14 @@ def check_and_respond():
             print(f"No emails found via AppleScript for {email}. Skipping.")
             continue
 
-        # Parse emails to find the latest
-        messages = raw_data.split("///END_OF_EMAIL///")
+        # Parse emails to find the latest using unified parser
+        messages = parse_raw_data(raw_data)
         last_date = None
         
-        for msg in messages:
-            if not msg.strip():
-                continue
-            parts = msg.split("|||")
-            if len(parts) >= 3:
-                date_str = parts[2].strip()
-                # We need to parse this date
-                dt = parse_date(date_str)
-                if last_date is None or dt > last_date:
-                    last_date = dt
+        valid_dates = [m.get('timestamp') for m in messages if m.get('timestamp') and m.get('timestamp') != datetime.min]
+        
+        if valid_dates:
+            last_date = max(valid_dates)
         
         if last_date:
             days_diff = (datetime.now() - last_date).days

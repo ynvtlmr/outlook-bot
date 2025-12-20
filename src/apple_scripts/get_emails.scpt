@@ -54,7 +54,9 @@ on run argv
 					set msgContent to plain text content of msg
 					set msgDate to time sent of msg
 					
-					set end of emailList to msgSenderAddress & "|||" & msgSubject & "|||" & msgDate & "|||" & msgContent & "///END_OF_EMAIL///"
+                    -- Standardize format for Python parser
+                    set entry to "ID: NO_ID" & "\n" & "From: " & msgSenderAddress & "\n" & "Date: " & msgDate & "\n" & "Subject: " & msgSubject & "\n" & "---BODY_START---\n" & msgContent & "\n---BODY_END---"
+					set end of emailList to entry
 				on error
 				    -- Skip bad parse
 				end try
@@ -65,6 +67,6 @@ on run argv
 		end try
 	end tell
     
-    set AppleScript's text item delimiters to "\n"
+    set AppleScript's text item delimiters to "\n///END_OF_MESSAGE///\n"
     return emailList as text
 end run

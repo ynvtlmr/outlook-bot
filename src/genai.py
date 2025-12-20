@@ -2,15 +2,7 @@ from google import genai
 import json
 import os
 import sys
-from config import GEMINI_API_KEY
-
-
-# Priority list of models to cycle through
-AVAILABLE_MODELS = [
-    "gemini-3-flash",
-    "gemini-2.5-flash", 
-    "gemini-2.5-flash-lite"
-]
+from config import GEMINI_API_KEY, AVAILABLE_MODELS
 
 def generate_reply(email_body, system_prompt):
     """
