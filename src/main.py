@@ -8,6 +8,7 @@ from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, BASE_DIR
 from date_utils import get_latest_date
 
 import re
+import html
 from datetime import datetime, timedelta
 
 def main():
@@ -102,18 +103,22 @@ def main():
                 
                 try:
                     if generated_reply:
-                         print("\n" + "#"*30)
-                         print("GENERATED REPLY:")
-                         print("#"*30)
-                         print(generated_reply)
-                         print("#"*30 + "\n")
-                         
-                         print("  -> Creating empty draft (reply printed to console)...")
-                         result = client.reply_to_message(msg_id)
+                        print("\n" + "#"*30)
+                        print("GENERATED REPLY:")
+                        print("#"*30)
+                        print(generated_reply)
+                        print("#"*30 + "\n")
+                        
+                        print("  -> Creating draft with generated reply...")
+                        
+                        # Prepare for HTML insertion
+                        # Sending RAW generated reply (with newlines, no HTML escaping) as per verified test case.
+                        # AppleScript wraps it in <p> which seems to handle it.
+                        result = client.reply_to_message(msg_id, generated_reply)
                     else:
-                         print("  -> Failed to generate reply (or empty). Creating empty draft.")
-                         result = client.reply_to_message(msg_id)
-                         
+                        print("  -> Failed to generate reply (or empty). Creating empty draft.")
+                        result = client.reply_to_message(msg_id)
+                        
                     print(f"  -> {result}")
                 except Exception as e:
                     print(f"  -> Failed to create draft: {e}")

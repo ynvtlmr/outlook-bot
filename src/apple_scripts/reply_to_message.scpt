@@ -49,6 +49,19 @@ on run argv
 			-- 2. Create Reply (This handles the 'From' account automatically)
 			set newDraft to reply to targetMsg
 			
+			-- 2.1 Set Content (Prepend) - Done IMMEDIATELY to match successful experiment flow
+			try
+			    if responseBody is not "" then
+			        set oldContent to content of newDraft
+			        -- Convert newlines to BR?
+			        -- Simple replacement:
+			        set newContent to "<p>" & responseBody & "</p><br><br>" & oldContent
+			        set content of newDraft to newContent
+			    end if
+			on error e
+			    return "Error setting content: " & e
+			end try
+			
 			-- Get my address/name to exclude from recipients
 			set myAddress to ""
 			set myName to ""
@@ -148,10 +161,6 @@ on run argv
 			     on error
 			     end try
 			end repeat
-			
-			-- 4. Set Content (Prepend) - REMOVED
-			-- set currentContent to content of newDraft
-			-- set content of newDraft to responseBody & "\n\n" & currentContent
 			
 			-- 5. Open it
 			open newDraft
