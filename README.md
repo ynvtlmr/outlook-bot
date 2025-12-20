@@ -69,6 +69,8 @@ python src/main.py
 - **`src/main.py`**: The primary entry point for the flagged email workflow.
 - **`src/genai.py`**: Handles interactions with the Google GenAI SDK.
 - **`src/scraper.py`**: logic for parsing raw Outlook text data into Python dictionaries.
+- **`src/outlook_client.py`**: Wrapper for executing AppleScripts.
+- **`src/date_utils.py`**: Utilities for parsing various date formats.
 - **`src/apple_scripts/`**: Raw AppleScript files used to query the Outlook application.
 - **`output/`**: Directory where scraped thread logs are saved for debugging.
 
