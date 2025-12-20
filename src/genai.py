@@ -5,9 +5,9 @@ from config import GEMINI_API_KEY
 
 def get_latest_flash_model():
     """
-    Returns the 'gemini-flash-lite-latest' model.
+    Returns the 'gemini-2.5-flash' model.
     """
-    model = 'gemini-flash-lite-latest'
+    model = 'gemini-2.5-flash'
     print(f"Selected Model: {model}")
     return model
 

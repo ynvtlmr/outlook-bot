@@ -40,6 +40,8 @@ class OutlookClient:
         args = [str(message_id)]
         if content:
             args.append(content)
+        else:
+            args.append("Hey, when you have the chance, please send me an update.")
         return self._run_script('reply_to_message.scpt', args)
 
 def get_outlook_version():
