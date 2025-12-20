@@ -132,8 +132,7 @@ def main():
                             html_safe_reply = html.escape(reply_text)
                             
                             # 2. Convert newlines to HTML line breaks
-                            formatted_reply = html_safe_reply.replace('\n\n', '<br>')
-                            formatted_reply = formatted_reply.replace('\n', '<br>')
+                            formatted_reply = html_safe_reply.replace('\n', '<br>')
                             
                             result = client.reply_to_message(msg_id, formatted_reply)
                             print(f"  -> {result}")
