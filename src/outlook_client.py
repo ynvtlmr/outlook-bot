@@ -33,11 +33,14 @@ class OutlookClient:
         """
         return self._run_script('create_draft.scpt', [to_address, subject, content])
 
-    def reply_to_message(self, message_id):
+    def reply_to_message(self, message_id, content=None):
         """
         Replies to a specific message by ID, simulating 'Reply All'.
         """
-        return self._run_script('reply_to_message.scpt', [str(message_id)])
+        args = [str(message_id)]
+        if content:
+            args.append(content)
+        return self._run_script('reply_to_message.scpt', args)
 
 def get_outlook_version():
     """

@@ -1,5 +1,9 @@
 on run argv
 	set msgID to item 1 of argv
+	set responseBody to ""
+	if (count of argv) > 1 then
+		set responseBody to item 2 of argv
+	end if
 	
 	tell application "Microsoft Outlook"
 		try
@@ -145,7 +149,6 @@ on run argv
 			     end try
 			end repeat
 			
-			-- 4. Set Content (Prepend)
 			-- 4. Set Content (Prepend) - REMOVED
 			-- set currentContent to content of newDraft
 			-- set content of newDraft to responseBody & "\n\n" & currentContent

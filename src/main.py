@@ -1,8 +1,10 @@
 import sys
+import os
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
+import genai
 
-from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD
+from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, BASE_DIR
 from date_utils import get_latest_date
 
 import re
@@ -83,9 +85,35 @@ def main():
                 if not msg_id:
                     print(f"  -> Error: No Message ID found for target message.")
                     continue
-                    
+
+                # Load System Prompt
+                system_prompt_path = os.path.join(BASE_DIR, 'system_prompt.txt')
                 try:
-                    result = client.reply_to_message(msg_id)
+                    with open(system_prompt_path, 'r') as f:
+                        system_prompt = f.read()
+                except Exception as e:
+                    print(f"  -> Warning: Could not read system prompt: {e}")
+                    system_prompt = "You are a helpful assistant."
+
+                # Generate Reply
+                email_body = target_msg.get('content', '')
+                print("  -> Generating reply with Gemini...")
+                generated_reply = genai.generate_reply(email_body, system_prompt)
+                
+                try:
+                    if generated_reply:
+                         print("\n" + "#"*30)
+                         print("GENERATED REPLY:")
+                         print("#"*30)
+                         print(generated_reply)
+                         print("#"*30 + "\n")
+                         
+                         print("  -> Creating empty draft (reply printed to console)...")
+                         result = client.reply_to_message(msg_id)
+                    else:
+                         print("  -> Failed to generate reply (or empty). Creating empty draft.")
+                         result = client.reply_to_message(msg_id)
+                         
                     print(f"  -> {result}")
                 except Exception as e:
                     print(f"  -> Failed to create draft: {e}")
