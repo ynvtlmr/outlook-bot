@@ -50,7 +50,7 @@ pip install -r requirements.txt
 
 #### Customization
 - **Persona**: Edit `system_prompt.txt` to change how the AI writes (e.g., tone, style, signature).
-- **Settings**: Edit `src/config.py` to change the `DAYS_THRESHOLD` or the list of `AVAILABLE_MODELS`.
+- **Settings**: Edit `config.yaml` to change the `days_threshold` or the list of `available_models`.
 
 ---
 

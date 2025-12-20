@@ -1,0 +1,5 @@
+days_threshold: 5
+available_models:
+  - gemini-3-flash
+  - gemini-2.5-flash
+  - gemini-2.5-flash-lite
