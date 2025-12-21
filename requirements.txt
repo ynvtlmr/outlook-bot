@@ -1,4 +1,5 @@
-python-dateutil
-python-dotenv
+customtkinter
+pyyaml
 google-genai
+python-dotenv
 PyYAML
