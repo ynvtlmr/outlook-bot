@@ -1,7 +1,9 @@
 from google import genai
+from google.genai import types
 import json
 import os
 import sys
+import certifi
 from config import GEMINI_API_KEY, AVAILABLE_MODELS, DEFAULT_REPLY
 
 def generate_reply(email_body, system_prompt):
@@ -19,7 +21,12 @@ def generate_reply(email_body, system_prompt):
         print("Error: GEMINI_API_KEY not found in environment variables.")
         return DEFAULT_REPLY
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options=types.HttpOptions(
+            client_args={'verify': certifi.where()}
+        )
+    )
     full_prompt = f"{system_prompt}\n\nEmail Thread:\n{email_body}\n\nResponse:"
 
     for model_name in AVAILABLE_MODELS:
@@ -57,7 +64,12 @@ def generate_batch_replies(email_batch, system_prompt):
     if not email_batch:
         return {}
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options=types.HttpOptions(
+            client_args={'verify': certifi.where()}
+        )
+    )
     
     # transform the batch into a cleaner input format for the LLM
     # We start by telling it what we want

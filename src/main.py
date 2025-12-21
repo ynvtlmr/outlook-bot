@@ -1,11 +1,5 @@
 import sys
 import os
-import certifi
-
-# Fix SSL: CERTIFICATE_VERIFY_FAILED error on Mac
-os.environ['SSL_CERT_FILE'] = certifi.where()
-os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
-
 import html
 import traceback
 from datetime import datetime, timedelta
