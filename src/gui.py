@@ -24,7 +24,11 @@ class OutlookBotGUI(ctk.CTk):
         self.title("Outlook Bot Manager")
         self.geometry("800x700")
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1) # Log area expands
+        # Row 0: Control Panel
+        # Row 1: Tab View
+        # Row 2: "Console Output" Label
+        # Row 3: Log Box (needs to expand)
+        self.grid_rowconfigure(3, weight=1)
 
         self.process = None
         self.is_running = False
@@ -56,12 +60,14 @@ class OutlookBotGUI(ctk.CTk):
 
         # --- Log Output ---
         self.log_lbl = ctk.CTkLabel(self, text="Console Output:", font=("Arial", 12, "bold"))
-        self.log_lbl.grid(row=1, column=0, sticky="s", padx=25, pady=(0, 0)) # Hack to place label 
-        # Actually let's put it above the log box in a better way or just ignore the label
+        self.log_lbl.grid(row=2, column=0, sticky="nw", padx=20, pady=(10, 0))
         
         self.log_box = ctk.CTkTextbox(self, font=("Consolas", 12))
-        self.log_box.grid(row=2, column=0, padx=20, pady=(0, 20), sticky="nsew")
+        self.log_box.grid(row=3, column=0, padx=20, pady=(5, 20), sticky="nsew")
         self.log_box.configure(state="disabled")
+
+        # Adjust row configuration to let the log box expand
+        self.grid_rowconfigure(3, weight=1)
 
         # Load initial config
         self.load_all_configs()
