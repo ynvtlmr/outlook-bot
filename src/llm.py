@@ -369,11 +369,11 @@ class LLMService:
                         response_format={"type": "json_object"},
                         # Note: 'json_object' requires 'json' in the prompt. prompt_intro has it.
                         # Also, this returns a JSON object, but our prompt asks for a LIST.
-                        # OpenAI's 'json_object' mode ensures valid JSON, 
+                        # OpenAI's 'json_object' mode ensures valid JSON,
                         # but usually expects a root object { "data": [...] }
                         # If our prompt asks for a list, it might complain or wrap it.
                         # Let's adjust safety: If provider is OpenAI, we might wrap the request or just trust it.
-                        # For now, let's try standard mode if we aren't sure about the structure, 
+                        # For now, let's try standard mode if we aren't sure about the structure,
                         # or strictly ask for an object.
                     )
                     content = completion.choices[0].message.content
