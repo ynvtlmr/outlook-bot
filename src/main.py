@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
-import genai
+import llm
 
 from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, SYSTEM_PROMPT_PATH
 from date_utils import get_latest_date
@@ -90,7 +90,7 @@ def filter_threads_for_replies(threads):
         
     return candidates
 
-def process_replies(candidates, client, system_prompt):
+def process_replies(candidates, client, system_prompt, llm_service):
     """
     Generates replies for candidates and creates drafts.
     """
@@ -117,8 +117,8 @@ def process_replies(candidates, client, system_prompt):
     if not batch_jobs:
         return
 
-    print(f"\nProcessing batch of {len(batch_jobs)} emails with Gemini...")
-    batch_replies = genai.generate_batch_replies(batch_jobs, system_prompt)
+    print(f"\nProcessing batch of {len(batch_jobs)} emails with LLM Service...")
+    batch_replies = llm_service.generate_batch_replies(batch_jobs, system_prompt)
     
     print(f"Received {len(batch_replies)} replies from Gemini.")
     
@@ -172,8 +172,15 @@ def main():
         client = OutlookClient(APPLESCRIPTS_DIR)
         system_prompt = load_system_prompt()
         
+        # Initialize LLM Service (Detects models)
+        try:
+            llm_service = llm.LLMService()
+        except Exception as e:
+            print(f"Error initializing LLM Service: {e}")
+            return
+
         candidates = filter_threads_for_replies(flagged_threads)
-        process_replies(candidates, client, system_prompt)
+        process_replies(candidates, client, system_prompt, llm_service)
                            
     except Exception as e:
         print(f"Error during execution: {e}")

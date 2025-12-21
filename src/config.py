@@ -47,15 +47,13 @@ except Exception as e:
 
 # Configuration Values
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DAYS_THRESHOLD = _config_data.get('days_threshold', 5)
 DEFAULT_REPLY = _config_data.get('default_reply', "Thank you for your email. I will review it and get back to you shortly.")
 
-# AI Models
-AVAILABLE_MODELS = _config_data.get('available_models', [
-    "gemini-3-flash",
-    "gemini-2.5-flash", 
-    "gemini-2.5-flash-lite"
-])
+# AI Models (Now dynamic, but we might keep this list for saving preferences if needed in the future)
+# For now, we remove the hardcoded defaults entirely as requested.
+AVAILABLE_MODELS = _config_data.get('available_models', [])
 
 # Parsing Delimiters
 MSG_DELIMITER = "\n///END_OF_MESSAGE///\n"

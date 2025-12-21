@@ -8,6 +8,7 @@ from config import DAYS_THRESHOLD, DEFAULT_REPLY, CONFIG_PATH, ENV_PATH, SYSTEM_
 
 # Import main script logic
 import main
+import llm
 
 # --- Configuration & Constants ---
 ctk.set_appearance_mode("System")
@@ -100,27 +101,41 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_api_key = ctk.CTkEntry(tab, width=400, show="*") # Masked by default
         self.entry_api_key.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
         
-        # Toggle visibility
+        # Toggle visibility (Gemini)
         self.chk_show_key = ctk.CTkCheckBox(tab, text="Show", command=self.toggle_key_visibility, width=60)
         self.chk_show_key.grid(row=0, column=2, padx=10, pady=10)
 
+        # OpenAI API Key
+        lbl_openai = ctk.CTkLabel(tab, text="OpenAI API Key:")
+        lbl_openai.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        self.entry_openai_key = ctk.CTkEntry(tab, width=400, show="*")
+        self.entry_openai_key.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+        
+        # Toggle visibility (OpenAI)
+        self.chk_show_openai = ctk.CTkCheckBox(tab, text="Show", command=self.toggle_openai_visibility, width=60)
+        self.chk_show_openai.grid(row=1, column=2, padx=10, pady=10)
+
         # Days Threshold
         lbl_days = ctk.CTkLabel(tab, text="Days Threshold:")
-        lbl_days.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        lbl_days.grid(row=2, column=0, padx=10, pady=10, sticky="w")
         self.entry_days = ctk.CTkEntry(tab, width=100)
-        self.entry_days.grid(row=1, column=1, padx=10, pady=10, sticky="w")
+        self.entry_days.grid(row=2, column=1, padx=10, pady=10, sticky="w")
 
         # Default Reply
         lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
-        lbl_reply.grid(row=2, column=0, padx=10, pady=10, sticky="nw")
+        lbl_reply.grid(row=3, column=0, padx=10, pady=10, sticky="nw")
         self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
-        self.txt_default_reply.grid(row=2, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        self.txt_default_reply.grid(row=3, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
 
         # Models
-        lbl_models = ctk.CTkLabel(tab, text="Available Models\n(one per line):")
-        lbl_models.grid(row=3, column=0, padx=10, pady=10, sticky="nw")
+        lbl_models = ctk.CTkLabel(tab, text="Detected Models:")
+        lbl_models.grid(row=4, column=0, padx=10, pady=10, sticky="nw")
         self.txt_models = ctk.CTkTextbox(tab, height=100)
-        self.txt_models.grid(row=3, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        self.txt_models.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+
+        # Refresh Models Button
+        self.btn_refresh_models = ctk.CTkButton(tab, text="Refresh Models", command=self.refresh_models_list)
+        self.btn_refresh_models.grid(row=4, column=2, padx=10, pady=10, sticky="nw")
 
     def setup_prompt_tab(self):
         tab = self.tab_view.tab("System Prompt")
@@ -135,6 +150,12 @@ class OutlookBotGUI(ctk.CTk):
             self.entry_api_key.configure(show="")
         else:
             self.entry_api_key.configure(show="*")
+            
+    def toggle_openai_visibility(self):
+        if self.chk_show_openai.get():
+            self.entry_openai_key.configure(show="")
+        else:
+            self.entry_openai_key.configure(show="*")
 
     def log(self, message):
         self.log_box.configure(state="normal")
@@ -162,17 +183,9 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_default_reply.delete("0.0", "end")
         self.txt_default_reply.insert("0.0", data.get('default_reply', DEFAULT_REPLY))
 
-        # Models
-        models = data.get('available_models', [])
-        # Fallback to models in config if list is empty? 
-        # config.py has AVAILABLE_MODELS. The GUI logic currently doesn't import it.
-        # Let's import it to be consistent.
-        if not models:
-            from config import AVAILABLE_MODELS
-            models = AVAILABLE_MODELS
-
-        self.txt_models.delete("0.0", "end")
-        self.txt_models.insert("0.0", "\n".join(models))
+        # Models (Handled by refresh_models_list)
+        # We don't load 'available_models' from yaml anymore as it's dynamic
+        pass
 
         # 2. Load .env
         try:
@@ -181,8 +194,16 @@ class OutlookBotGUI(ctk.CTk):
                 api_key = os.getenv("GEMINI_API_KEY", "")
                 self.entry_api_key.delete(0, "end")
                 self.entry_api_key.insert(0, api_key)
+                
+                openai_key = os.getenv("OPENAI_API_KEY", "")
+                self.entry_openai_key.delete(0, "end")
+                self.entry_openai_key.insert(0, openai_key)
         except OSError as e:
             self.log(f"[Error] Failed to load .env: {e}\n")
+            
+        # 3. Detect Models (Use the service)
+        # We delay this slightly or run it now if we have keys
+        self.refresh_models_list()
 
         # 3. Load System Prompt
         try:
@@ -225,8 +246,11 @@ class OutlookBotGUI(ctk.CTk):
             
             # Use dotenv.set_key to preserve other vars if any
             dotenv.set_key(ENV_PATH, "GEMINI_API_KEY", new_key)
-            # Update current env in memory nicely
             os.environ["GEMINI_API_KEY"] = new_key
+            
+            new_openai_key = self.entry_openai_key.get().strip()
+            dotenv.set_key(ENV_PATH, "OPENAI_API_KEY", new_openai_key)
+            os.environ["OPENAI_API_KEY"] = new_openai_key
         except OSError as e:
             self.log(f"[Error] Failed to save .env: {e}\n")
             success = False
@@ -303,6 +327,30 @@ class OutlookBotGUI(ctk.CTk):
             # config.should_stop = True (if we implemented that)
             pass
     
+    def refresh_models_list(self):
+        self.log("[Info] Detecting available models...\n")
+        try:
+            # Re-read keys from entry (in case user typed but didn't save yet, 
+            # though LLMService reads from env. So we must ensure ENV is set)
+            # For detection to work with Unsaved keys, we must set them momentarily or just save them.
+            # Let's just rely on what's in ENV. 
+            # If user types key, they must Save? 
+            # Let's explicitly set ENV from UI before detecting.
+            os.environ["GEMINI_API_KEY"] = self.entry_api_key.get().strip()
+            os.environ["OPENAI_API_KEY"] = self.entry_openai_key.get().strip()
+            
+            service = llm.LLMService()
+            models = service.get_models_list()
+            
+            self.txt_models.configure(state="normal")
+            self.txt_models.delete("0.0", "end")
+            self.txt_models.insert("0.0", "\n".join(models))
+            self.txt_models.configure(state="disabled") # Make Read-Only
+            
+            self.log(f"[Info] Found {len(models)} models.\n")
+        except Exception as e:
+            self.log(f"[Error] Failed to detect models: {e}\n")
+
     def on_close(self):
         if self.is_running:
             self.stop_bot()
