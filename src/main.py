@@ -8,7 +8,7 @@ from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
 import genai
 
-from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, BASE_DIR
+from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, SYSTEM_PROMPT_PATH
 from date_utils import get_latest_date
 
 def print_separator(char="-", length=30):
@@ -26,9 +26,8 @@ def check_outlook_status():
 
 def load_system_prompt():
     """Loads text from system_prompt.txt or returns default."""
-    system_prompt_path = os.path.join(BASE_DIR, 'system_prompt.txt')
     try:
-        with open(system_prompt_path, 'r') as f:
+        with open(SYSTEM_PROMPT_PATH, 'r') as f:
             return f.read()
     except Exception as e:
         print(f"  -> Warning: Could not read system prompt: {e}")
