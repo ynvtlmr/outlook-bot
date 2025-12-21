@@ -5,6 +5,7 @@ import os
 import sys
 import yaml
 import dotenv
+from config import DAYS_THRESHOLD, DEFAULT_REPLY
 
 # --- Configuration & Constants ---
 ctk.set_appearance_mode("System")
@@ -128,25 +129,33 @@ class OutlookBotGUI(ctk.CTk):
         self.log("[Info] Loading configurations...\n")
         
         # 1. Load Config YAML
+        data = {}
         try:
             if os.path.exists(CONFIG_PATH):
                 with open(CONFIG_PATH, 'r') as f:
                     data = yaml.safe_load(f) or {}
-                
-                # Days
-                self.entry_days.delete(0, "end")
-                self.entry_days.insert(0, str(data.get('days_threshold', 5)))
-
-                # Default Reply
-                self.txt_default_reply.delete("0.0", "end")
-                self.txt_default_reply.insert("0.0", data.get('default_reply', "Thank you for your email. I will review it and get back to you shortly."))
-
-                # Models
-                models = data.get('available_models', [])
-                self.txt_models.delete("0.0", "end")
-                self.txt_models.insert("0.0", "\n".join(models))
-        except Exception as e:
+        except (yaml.YAMLError, OSError) as e:
             self.log(f"[Error] Failed to load config.yaml: {e}\n")
+
+        # Days
+        self.entry_days.delete(0, "end")
+        self.entry_days.insert(0, str(data.get('days_threshold', DAYS_THRESHOLD)))
+
+        # Default Reply
+        self.txt_default_reply.delete("0.0", "end")
+        self.txt_default_reply.insert("0.0", data.get('default_reply', DEFAULT_REPLY))
+
+        # Models
+        models = data.get('available_models', [])
+        # Fallback to models in config if list is empty? 
+        # config.py has AVAILABLE_MODELS. The GUI logic currently doesn't import it.
+        # Let's import it to be consistent.
+        if not models:
+            from config import AVAILABLE_MODELS
+            models = AVAILABLE_MODELS
+
+        self.txt_models.delete("0.0", "end")
+        self.txt_models.insert("0.0", "\n".join(models))
 
         # 2. Load .env
         try:
@@ -155,7 +164,7 @@ class OutlookBotGUI(ctk.CTk):
                 api_key = os.getenv("GEMINI_API_KEY", "")
                 self.entry_api_key.delete(0, "end")
                 self.entry_api_key.insert(0, api_key)
-        except Exception as e:
+        except OSError as e:
             self.log(f"[Error] Failed to load .env: {e}\n")
 
         # 3. Load System Prompt
@@ -165,7 +174,7 @@ class OutlookBotGUI(ctk.CTk):
                     content = f.read()
                 self.txt_prompt.delete("0.0", "end")
                 self.txt_prompt.insert("0.0", content)
-        except Exception as e:
+        except OSError as e:
             self.log(f"[Error] Failed to load system_prompt.txt: {e}\n")
 
     def save_config(self):
@@ -188,21 +197,20 @@ class OutlookBotGUI(ctk.CTk):
         except ValueError:
             self.log("[Error] Invalid Days Threshold. Must be an integer.\n")
             success = False
-        except Exception as e:
+        except (yaml.YAMLError, OSError) as e:
             self.log(f"[Error] Failed to save config.yaml: {e}\n")
             success = False
 
         # 2. Save .env
         try:
             new_key = self.entry_api_key.get().strip()
-            if not os.path.exists(ENV_PATH):
-                 with open(ENV_PATH, 'w') as f: pass # Create if missing
+
             
             # Use dotenv.set_key to preserve other vars if any
             dotenv.set_key(ENV_PATH, "GEMINI_API_KEY", new_key)
             # Update current env in memory nicely
             os.environ["GEMINI_API_KEY"] = new_key
-        except Exception as e:
+        except OSError as e:
             self.log(f"[Error] Failed to save .env: {e}\n")
             success = False
 
@@ -211,7 +219,7 @@ class OutlookBotGUI(ctk.CTk):
             prompt_content = self.txt_prompt.get("0.0", "end").strip()
             with open(SYSTEM_PROMPT_PATH, 'w') as f:
                 f.write(prompt_content)
-        except Exception as e:
+        except OSError as e:
             self.log(f"[Error] Failed to save system_prompt.txt: {e}\n")
             success = False
             
@@ -260,7 +268,7 @@ class OutlookBotGUI(ctk.CTk):
             return_code = self.process.returncode
             self.after(0, self.log, f"\n[Process finished with exit code {return_code}]\n")
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             self.after(0, self.log, f"\n[Error running process: {e}]\n")
         finally:
             self.after(0, self.process_finished)

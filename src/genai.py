@@ -50,6 +50,8 @@ def generate_batch_replies(email_batch, system_prompt):
     """
     if not GEMINI_API_KEY:
         print("Error: GEMINI_API_KEY not found in environment variables.")
+        if not email_batch:
+            return {}
         return {item['id']: DEFAULT_REPLY for item in email_batch}
     
     if not email_batch:
