@@ -10,7 +10,7 @@ Automatically drafts replies for emails you have flagged in Outlook.
     1. Scans Outlook for threads containing messages with an **"Active"** flag.
     2. Extracts the full conversation context (not just the tagged email).
     3. Checks if a reply is actually needed (filters out threads where you replied recently).
-    4. Uses **Gemini** (e.g., `gemini-3-flash`) to generate a draft reply based on your `system_prompt.txt`.
+    4. Uses **Gemini** or **OpenAI** to generate a draft reply based on your `system_prompt.txt`.
     5. Creates the draft in Outlook for your review.
 
 ---

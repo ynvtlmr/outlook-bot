@@ -145,10 +145,71 @@ class LLMService:
             except Exception as e:
                 print(f"  -> OpenAI model discovery failed: {e}")
 
+        # Sort models by estimated cost/efficiency
+        self._sort_models_by_cost()
+
         if not self.available_models:
             print("  -> No suitable cheap/fast models found. Please check API Keys.")
         else:
             print(f"  -> Discovered {len(self.available_models)} suitable models: " + ", ".join([m['id'] for m in self.available_models]))
+
+    def _sort_models_by_cost(self):
+        """
+        Sorts self.available_models based on a heuristic of cost/speed + version freshness.
+        
+        Sort Keys:
+        1. Priority (Ascending): 0 (Cheapest) -> 1 (Very Cheap) -> ...
+        2. Version (Descending): Newer versions (2.5, 4.1, 5) preferred within same priority.
+        3. Name (Ascending): Alphabetical tie-break.
+        
+        Priority 0 (Cheapest): Gemini Lite, GPT-4o-mini, GPT-5-mini
+        Priority 1 (Very Cheap): Gemini Flash
+        Priority 2 (Cheap): GPT-3.5-Turbo
+        Priority 3: Others
+        """
+        def get_sort_key(model_entry):
+            mid = model_entry['id'].lower()
+            
+            # --- 1. Priority Score ---
+            priority = 3 # Default
+            
+            if 'lite' in mid: priority = 0
+            # Avoid matching 'mini' inside 'gemini'
+            elif 'mini' in mid and 'gemini' not in mid: priority = 0
+            
+            elif 'flash' in mid: priority = 1
+            
+            elif 'turbo' in mid: priority = 2
+            
+            # --- 2. Version Extraction ---
+            # Finds the first identifying number sequence (e.g. 2.5, 3.5, 4, 5)
+            # handle '4o' as 4.0 if not explicit 4.5
+            # We look for (\d+(\.\d+)?)
+            version = 0.0
+            search = re.search(r'(\d+(\.\d+)?)', mid)
+            if search:
+                try:
+                    version = float(search.group(1))
+                except ValueError:
+                    version = 0.0
+            
+            # Additional heuristic: '4o' is usually better/newer than '4', but '4.1' might be better.
+            # If we see 'gpt-4o', maybe bump version slightly if it parsed as 4.0?
+            if 'gpt-4o' in mid and version == 4.0:
+                version = 4.5 # Arbitrary bump to rank above standard 4.0 if needed
+                
+            # We want ASCENDING version (Older first, as requested).
+            # Python sorts tuples element-wise.
+            # So we return +version.
+            
+            return (priority, version, mid)
+            
+        # Debug sort keys
+        # print("DEBUG SORT KEYS:")
+        # for m in self.available_models:
+        #    print(f"{m['id']}: {get_sort_key(m)}")
+            
+        self.available_models.sort(key=get_sort_key)
 
     def get_models_list(self):
         """Returns list of model names for display."""

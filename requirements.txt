@@ -4,4 +4,4 @@ PyYAML
 google-genai
 python-dotenv
 python-dateutil
-openai>=1.0.0
+openai
