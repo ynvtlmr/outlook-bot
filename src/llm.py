@@ -384,3 +384,42 @@ class LLMService:
                 continue
         
         return {}
+
+    @staticmethod
+    def test_gemini_connection(api_key):
+        """
+        Tests connectivity to Gemini API with the provided key.
+        Returns (success: bool, message: str)
+        """
+        if not api_key:
+            return False, "API Key is empty."
+            
+        try:
+            client = genai.Client(
+                api_key=api_key,
+                http_options=types.HttpOptions(
+                    client_args={'verify': certifi.where()}
+                )
+            )
+            # Lightweight call to list models
+            list(client.models.list())
+            return True, "Connection Successful!"
+        except Exception as e:
+            return False, f"Connection Failed: {str(e)}"
+
+    @staticmethod
+    def test_openai_connection(api_key):
+        """
+        Tests connectivity to OpenAI API with the provided key.
+        Returns (success: bool, message: str)
+        """
+        if not api_key:
+            return False, "API Key is empty."
+
+        try:
+            client = OpenAI(api_key=api_key)
+            # Lightweight call to list models
+            client.models.list()
+            return True, "Connection Successful!"
+        except Exception as e:
+            return False, f"Connection Failed: {str(e)}"

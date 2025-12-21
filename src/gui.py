@@ -105,6 +105,10 @@ class OutlookBotGUI(ctk.CTk):
         self.chk_show_key = ctk.CTkCheckBox(tab, text="Show", command=self.toggle_key_visibility, width=60)
         self.chk_show_key.grid(row=0, column=2, padx=10, pady=10)
 
+        # Test Button (Gemini)
+        self.btn_test_gemini = ctk.CTkButton(tab, text="Test", command=self.test_gemini, width=60, fg_color="#333333") 
+        self.btn_test_gemini.grid(row=0, column=3, padx=10, pady=10)
+
         # OpenAI API Key
         lbl_openai = ctk.CTkLabel(tab, text="OpenAI API Key:")
         lbl_openai.grid(row=1, column=0, padx=10, pady=10, sticky="w")
@@ -114,6 +118,10 @@ class OutlookBotGUI(ctk.CTk):
         # Toggle visibility (OpenAI)
         self.chk_show_openai = ctk.CTkCheckBox(tab, text="Show", command=self.toggle_openai_visibility, width=60)
         self.chk_show_openai.grid(row=1, column=2, padx=10, pady=10)
+
+        # Test Button (OpenAI)
+        self.btn_test_openai = ctk.CTkButton(tab, text="Test", command=self.test_openai, width=60, fg_color="#333333") 
+        self.btn_test_openai.grid(row=1, column=3, padx=10, pady=10)
 
         # Days Threshold
         lbl_days = ctk.CTkLabel(tab, text="Days Threshold:")
@@ -355,6 +363,39 @@ class OutlookBotGUI(ctk.CTk):
         if self.is_running:
             self.stop_bot()
         self.destroy()
+
+    def test_gemini(self):
+        key = self.entry_api_key.get().strip()
+        self.log(f"[Info] Testing Gemini connection...\n")
+        self.btn_test_gemini.configure(text="...", state="disabled")
+        
+        def _target():
+            success, msg = llm.LLMService.test_gemini_connection(key)
+            # Update UI on main thread
+            self.after(0, lambda: self._handle_test_result(self.btn_test_gemini, success, msg))
+
+        threading.Thread(target=_target, daemon=True).start()
+
+    def test_openai(self):
+        key = self.entry_openai_key.get().strip()
+        self.log(f"[Info] Testing OpenAI connection...\n")
+        self.btn_test_openai.configure(text="...", state="disabled")
+
+        def _target():
+            success, msg = llm.LLMService.test_openai_connection(key)
+             # Update UI on main thread
+            self.after(0, lambda: self._handle_test_result(self.btn_test_openai, success, msg))
+            
+        threading.Thread(target=_target, daemon=True).start()
+
+    def _handle_test_result(self, button, success, message):
+        button.configure(text="Test", state="normal")
+        if success:
+            button.configure(fg_color="green", hover_color="darkgreen")
+            self.log(f"[Success] {message}\n")
+        else:
+            button.configure(fg_color="darkred", hover_color="#800000")
+            self.log(f"[Error] {message}\n")
 
 if __name__ == "__main__":
     app = OutlookBotGUI()
