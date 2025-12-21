@@ -1,7 +1,0 @@
-certifi
-customtkinter
-PyYAML
-google-genai
-python-dotenv
-python-dateutil
-openai
