@@ -88,6 +88,30 @@ uv run python src/main.py
 
 ---
 
+## Development
+
+This project uses modern Python tooling for code quality.
+
+### Linting & Formatting
+We use `ruff` for both linting and formatting.
+```bash
+# Check for linting errors
+uv run ruff check .
+
+# Fix linting errors automatically
+uv run ruff check . --fix
+
+# Format code
+uv run ruff format .
+```
+
+### Type Checking
+We use `ty` (or static analysis tools) for type safety.
+```bash
+uv run ty check .
+```
+---
+
 ## Building for macOS
 
 If you prefer to run the tool as a standalone application (`.app`) without needing to touch the terminal, you can build it yourself or download a release.
@@ -116,7 +140,7 @@ If you run the packaged `OutlookBot.app`:
 
 - **`src/gui.py`**: The Graphical User Interface (GUI) entry point.
 - **`src/main.py`**: The primary logic script (CLI entry point).
-- **`src/genai.py`**: Handles interactions with the Google GenAI SDK.
+- **`src/llm.py`**: Handles interactions with Gemini & OpenAI SDKs.
 - **`src/scraper.py`**: logic for parsing raw Outlook text data into Python dictionaries.
 - **`src/outlook_client.py`**: Wrapper for executing AppleScripts.
 - **`src/date_utils.py`**: Utilities for parsing various date formats.
