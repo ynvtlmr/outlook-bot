@@ -120,7 +120,6 @@ If you prefer to run the tool as a standalone application (`.app`) without needi
 You can package the Python scripts into a macOS application using PyInstaller:
 
 ```bash
-
 uv run pyinstaller outlook_bot.spec
 ```
 The application will be created in the `dist/` folder as `OutlookBot.app`.
