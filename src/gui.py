@@ -66,9 +66,6 @@ class OutlookBotGUI(ctk.CTk):
         self.log_box.grid(row=3, column=0, padx=20, pady=(5, 20), sticky="nsew")
         self.log_box.configure(state="disabled")
 
-        # Adjust row configuration to let the log box expand
-        self.grid_rowconfigure(3, weight=1)
-
         # Load initial config
         self.load_all_configs()
         
@@ -95,11 +92,17 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days = ctk.CTkEntry(tab, width=100)
         self.entry_days.grid(row=1, column=1, padx=10, pady=10, sticky="w")
 
+        # Default Reply
+        lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
+        lbl_reply.grid(row=2, column=0, padx=10, pady=10, sticky="nw")
+        self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
+        self.txt_default_reply.grid(row=2, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+
         # Models
         lbl_models = ctk.CTkLabel(tab, text="Available Models\n(one per line):")
-        lbl_models.grid(row=2, column=0, padx=10, pady=10, sticky="nw")
+        lbl_models.grid(row=3, column=0, padx=10, pady=10, sticky="nw")
         self.txt_models = ctk.CTkTextbox(tab, height=100)
-        self.txt_models.grid(row=2, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        self.txt_models.grid(row=3, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
 
     def setup_prompt_tab(self):
         tab = self.tab_view.tab("System Prompt")
@@ -130,9 +133,15 @@ class OutlookBotGUI(ctk.CTk):
                 with open(CONFIG_PATH, 'r') as f:
                     data = yaml.safe_load(f) or {}
                 
+                # Days
                 self.entry_days.delete(0, "end")
                 self.entry_days.insert(0, str(data.get('days_threshold', 5)))
 
+                # Default Reply
+                self.txt_default_reply.delete("0.0", "end")
+                self.txt_default_reply.insert("0.0", data.get('default_reply', "Thank you for your email. I will review it and get back to you shortly."))
+
+                # Models
                 models = data.get('available_models', [])
                 self.txt_models.delete("0.0", "end")
                 self.txt_models.insert("0.0", "\n".join(models))
@@ -165,11 +174,13 @@ class OutlookBotGUI(ctk.CTk):
         # 1. Save YAML
         try:
             days = int(self.entry_days.get())
+            default_reply = self.txt_default_reply.get("0.0", "end").strip()
             models_text = self.txt_models.get("0.0", "end").strip()
             models = [m.strip() for m in models_text.split('\n') if m.strip()]
 
             data = {
                 'days_threshold': days,
+                'default_reply': default_reply,
                 'available_models': models
             }
             with open(CONFIG_PATH, 'w') as f:

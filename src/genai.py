@@ -2,7 +2,7 @@ from google import genai
 import json
 import os
 import sys
-from config import GEMINI_API_KEY, AVAILABLE_MODELS
+from config import GEMINI_API_KEY, AVAILABLE_MODELS, DEFAULT_REPLY
 
 def generate_reply(email_body, system_prompt):
     """
@@ -17,7 +17,7 @@ def generate_reply(email_body, system_prompt):
     """
     if not GEMINI_API_KEY:
         print("Error: GEMINI_API_KEY not found in environment variables.")
-        return None
+        return DEFAULT_REPLY
 
     client = genai.Client(api_key=GEMINI_API_KEY)
     full_prompt = f"{system_prompt}\n\nEmail Thread:\n{email_body}\n\nResponse:"
@@ -34,8 +34,8 @@ def generate_reply(email_body, system_prompt):
             print(f"Warning: Failed to generate reply with {model_name}. Error: {e}")
             continue
 
-    print("Error: All models failed to generate reply.")
-    return None
+    print("Error: All models failed to generate reply. Returning Default Reply.")
+    return DEFAULT_REPLY
 
 def generate_batch_replies(email_batch, system_prompt):
     """
@@ -50,7 +50,7 @@ def generate_batch_replies(email_batch, system_prompt):
     """
     if not GEMINI_API_KEY:
         print("Error: GEMINI_API_KEY not found in environment variables.")
-        return {}
+        return {item['id']: DEFAULT_REPLY for item in email_batch}
     
     if not email_batch:
         return {}
@@ -114,5 +114,5 @@ def generate_batch_replies(email_batch, system_prompt):
             print(f"Warning: Failed to generate batch replies with {model_name}. Error: {e}")
             continue
 
-    print("Error: All models failed to generate batch replies.")
-    return {}
+    print("Error: All models failed to generate batch replies. Using Default Reply for all.")
+    return {item['id']: DEFAULT_REPLY for item in email_batch}

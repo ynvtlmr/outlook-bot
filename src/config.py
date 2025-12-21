@@ -23,6 +23,9 @@ DAYS_THRESHOLD = _config_data.get('days_threshold', 5)
 OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
 APPLESCRIPTS_DIR = os.path.join(BASE_DIR, 'src', 'apple_scripts')
 
+# Fallback Content
+DEFAULT_REPLY = _config_data.get('default_reply', "Thank you for your email. I will review it and get back to you shortly.")
+
 # AI Models
 AVAILABLE_MODELS = _config_data.get('available_models', [
     "gemini-3-flash",
