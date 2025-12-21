@@ -238,6 +238,12 @@ class OutlookBotGUI(ctk.CTk):
         except OSError as e:
             self.log(f"[Error] Failed to load system_prompt.txt: {e}\n")
 
+        # 4. Auto-Test Connections if keys exist
+        if self.entry_api_key.get().strip():
+            self.test_gemini()
+        if self.entry_openai_key.get().strip():
+            self.test_openai()
+
     def save_config(self):
         success = True
 
