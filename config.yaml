@@ -1,5 +1,6 @@
-days_threshold: 5
 available_models:
-  - gemini-3-flash
-  - gemini-2.5-flash
-  - gemini-2.5-flash-lite
+- gemini-3-flash
+- gemini-2.5-flash
+- gemini-2.5-flash-lite
+days_threshold: 5
+default_reply: Thank you for your email. I will review it and get back to you shortly.
