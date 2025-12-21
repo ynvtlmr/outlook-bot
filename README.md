@@ -56,17 +56,64 @@ pip install -r requirements.txt
 
 ## Usage
 
-### To Generate Replies for Flagged Emails
-Run the main script. This will scrape flagged threads and create drafts for any that need attention.
+You can run the bot using either the Graphical User Interface (GUI) or the Command Line Interface (CLI).
+
+### Graphical User Interface (GUI)
+The GUI is the recommended way to manage settings and run the bot.
+
+**Launch the GUI:**
+```bash
+python src/gui.py
+```
+
+**Features:**
+- **Control Panel**: Start/Stop the bot and "Save All Settings" with a single click.
+    - *Note: "Stop" will wait for the current ongoing task to finish.*
+- **Configuration Tab**:
+    - **Gemini API Key**: Manage your key securely (toggles visibility).
+    - **Days Threshold**: Set the lookback period for email threads.
+    - **Default Reply**: Edit the fallback message.
+    - **Available Models**: Update the list of Gemini models.
+- **System Prompt Tab**: Edit the `system_prompt.txt` file to adjust the bot's persona and instructions.
+- **Console Output**: View real-time logs directly in the application window.
+
+### Command Line Interface (CLI)
+Alternatively, you can run the automation script directly from the terminal. This uses the current settings in `config.yaml` and `.env`.
+
 ```bash
 python src/main.py
 ```
 
 ---
 
+## Building for macOS
+
+If you prefer to run the tool as a standalone application (`.app`) without needing to touch the terminal, you can build it yourself or download a release.
+
+### 1. Build Locally
+You can package the Python scripts into a macOS application using PyInstaller:
+
+```bash
+pip install pyinstaller
+pyinstaller outlook_bot.spec
+```
+The application will be created in the `dist/` folder as `OutlookBot.app`.
+
+### 2. GitHub Actions (CI/CD)
+This project includes a specific GitHub workflow (`.github/workflows/build_app.yml`) that automatically builds and creates releases for both **Intel** and **Apple Silicon (M1/M2/M3)** Macs whenever a new tag (e.g., `v1.0`) is pushed.
+
+---
+
+## Standalone App Data
+If you run the packaged `OutlookBot.app`:
+- **Configuration & Logs**: All data is stored in `~/Documents/OutlookBot/`.
+    - This keeps your application bundle clean and allows updates without losing settings.
+- **First Run**: The app will automatically create this directory. use the GUI to configure your API key and settings, and they will be saved here.
+
 ## Project Structure
 
-- **`src/main.py`**: The primary entry point for the flagged email workflow.
+- **`src/gui.py`**: The Graphical User Interface (GUI) entry point.
+- **`src/main.py`**: The primary logic script (CLI entry point).
 - **`src/genai.py`**: Handles interactions with the Google GenAI SDK.
 - **`src/scraper.py`**: logic for parsing raw Outlook text data into Python dictionaries.
 - **`src/outlook_client.py`**: Wrapper for executing AppleScripts.
