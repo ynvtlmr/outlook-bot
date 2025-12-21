@@ -182,7 +182,7 @@ class LLMService:
 
         Sort Keys:
         1. Priority (Ascending): 0 (Cheapest) -> 1 (Very Cheap) -> ...
-        2. Version (Descending): Newer versions (2.5, 4.1, 5) preferred within same priority.
+        2. Version (Ascending): Older versions (2.5, 4.1, 5) preferred within same priority.
         3. Name (Ascending): Alphabetical tie-break.
 
         Priority 0 (Cheapest): Gemini Lite, GPT-4o-mini, GPT-5-mini

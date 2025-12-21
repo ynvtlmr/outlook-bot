@@ -21,7 +21,7 @@ Automatically drafts replies for emails you have flagged in Outlook.
 - **macOS**: Required for AppleScript support.
 - **Microsoft Outlook for Mac**: Must be running.
     - *Note: "Legacy Outlook" mode is recommended for best AppleScript compatibility.*
-- **Python**: 3.14 (Managed by `uv`).
+- **Python**: 3.13 (Managed by `uv`).
 - **Google Cloud API Key**: For Gemini access.
 
 ### 2. Installation
