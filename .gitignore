@@ -6,3 +6,7 @@ venv/
 .env
 dist/
 build/
+
+# New Tools
+.venv/
+.ruff_cache/

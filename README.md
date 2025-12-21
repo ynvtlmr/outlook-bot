@@ -21,18 +21,20 @@ Automatically drafts replies for emails you have flagged in Outlook.
 - **macOS**: Required for AppleScript support.
 - **Microsoft Outlook for Mac**: Must be running.
     - *Note: "Legacy Outlook" mode is recommended for best AppleScript compatibility.*
-- **Python**: 3.10+.
+- **Python**: 3.13 (Managed by `uv`).
 - **Google Cloud API Key**: For Gemini access.
 
 ### 2. Installation
 
- Clone the repository and set up a virtual environment:
+ Clone the repository and install dependencies using `uv`:
 ```bash
 git clone <repository_url>
 cd outlook-bot
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# If you don't have uv installed:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync dependencies and set up environment
+uv sync
 ```
 
 ### 3. Configuration
@@ -63,7 +65,7 @@ The GUI is the recommended way to manage settings and run the bot.
 
 **Launch the GUI:**
 ```bash
-python src/gui.py
+uv run python src/gui.py
 ```
 
 **Features:**
@@ -81,9 +83,33 @@ python src/gui.py
 Alternatively, you can run the automation script directly from the terminal. This uses the current settings in `config.yaml` and `.env`.
 
 ```bash
-python src/main.py
+uv run python src/main.py
 ```
 
+---
+
+## Development
+
+This project uses modern Python tooling for code quality.
+
+### Linting & Formatting
+We use `ruff` for both linting and formatting.
+```bash
+# Check for linting errors
+uv run ruff check .
+
+# Fix linting errors automatically
+uv run ruff check . --fix
+
+# Format code
+uv run ruff format .
+```
+
+### Type Checking
+We use `ty` (or static analysis tools) for type safety.
+```bash
+uv run ty check .
+```
 ---
 
 ## Building for macOS
@@ -94,8 +120,7 @@ If you prefer to run the tool as a standalone application (`.app`) without needi
 You can package the Python scripts into a macOS application using PyInstaller:
 
 ```bash
-pip install pyinstaller
-pyinstaller outlook_bot.spec
+uv run pyinstaller outlook_bot.spec
 ```
 The application will be created in the `dist/` folder as `OutlookBot.app`.
 
@@ -114,7 +139,7 @@ If you run the packaged `OutlookBot.app`:
 
 - **`src/gui.py`**: The Graphical User Interface (GUI) entry point.
 - **`src/main.py`**: The primary logic script (CLI entry point).
-- **`src/genai.py`**: Handles interactions with the Google GenAI SDK.
+- **`src/llm.py`**: Handles interactions with Gemini & OpenAI SDKs.
 - **`src/scraper.py`**: logic for parsing raw Outlook text data into Python dictionaries.
 - **`src/outlook_client.py`**: Wrapper for executing AppleScripts.
 - **`src/date_utils.py`**: Utilities for parsing various date formats.

@@ -1,9 +1,10 @@
 import os
 import re
-from datetime import datetime
-from config import OUTPUT_DIR, APPLESCRIPTS_DIR, MSG_DELIMITER, BODY_START, BODY_END
+
+from config import APPLESCRIPTS_DIR, BODY_END, BODY_START, MSG_DELIMITER, OUTPUT_DIR
 from date_utils import parse_date_string
 from outlook_client import OutlookClient
+
 
 def parse_raw_data(raw_data):
     """
@@ -12,18 +13,18 @@ def parse_raw_data(raw_data):
     messages = []
     # Split by message delimiter (added regex for robustness against newline variations)
     raw_msgs = raw_data.split(MSG_DELIMITER)
-    
+
     for raw_msg in raw_msgs:
         if not raw_msg.strip():
             continue
-            
+
         msg = {}
         # Simple parsing logic
-        
+
         lines = raw_msg.splitlines()
         content_lines = []
         in_body = False
-        
+
         for line in lines:
             if line.strip() == BODY_START:
                 in_body = True
@@ -31,36 +32,37 @@ def parse_raw_data(raw_data):
             if line.strip() == BODY_END:
                 in_body = False
                 continue
-                
+
             if in_body:
                 content_lines.append(line)
             else:
                 if line.startswith("ID: "):
-                    msg['id'] = line[4:].strip()
+                    msg["id"] = line[4:].strip()
                 elif line.startswith("From: "):
-                    msg['from'] = line[6:].strip()
+                    msg["from"] = line[6:].strip()
                 elif line.startswith("Date: "):
                     date_str = line[6:].strip()
-                    msg['date'] = date_str
-                    msg['timestamp'] = parse_date_string(date_str)
+                    msg["date"] = date_str
+                    msg["timestamp"] = parse_date_string(date_str)
                 elif line.startswith("Subject: "):
-                    msg['subject'] = line[9:].strip()
+                    msg["subject"] = line[9:].strip()
                 elif line.startswith("FlagStatus: "):
-                    msg['flag_status'] = line[12:].strip()
+                    msg["flag_status"] = line[12:].strip()
                 elif line.startswith("MessageID: "):
-                    msg['message_id'] = line[11:].strip()
-        
-        msg['content'] = "\n".join(content_lines)
-        
+                    msg["message_id"] = line[11:].strip()
+
+        msg["content"] = "\n".join(content_lines)
+
         # Fallback for subject grouping if ID is missing or generic
-        if not msg.get('id') or msg.get('id') == "NO_ID":
+        if not msg.get("id") or msg.get("id") == "NO_ID":
             # Normalize subject (remove Re:, Fwd:)
-            subj = msg.get('subject', 'No Subject')
-            norm_subj = re.sub(r'^(Re|Fwd|FW|RE):\s*', '', subj, flags=re.IGNORECASE).strip()
-            msg['id'] = norm_subj
-            
+            subj = msg.get("subject", "No Subject")
+            norm_subj = re.sub(r"^(Re|Fwd|FW|RE):\s*", "", subj, flags=re.IGNORECASE).strip()
+            msg["id"] = norm_subj
+
         messages.append(msg)
     return messages
+
 
 def group_into_threads(messages):
     """
@@ -69,22 +71,23 @@ def group_into_threads(messages):
     """
     threads_map = {}
     for msg in messages:
-        t_id = msg.get('id')
+        t_id = msg.get("id")
         if t_id not in threads_map:
             threads_map[t_id] = []
         threads_map[t_id].append(msg)
-        
+
     return list(threads_map.values())
+
 
 def scrape_messages(script_name, file_prefix="thread"):
     """
     Generic function to run a scraping script and save the results.
     """
     client = OutlookClient(APPLESCRIPTS_DIR)
-    
+
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
-        
+
     print(f"Running {script_name}...")
     try:
         raw_data = client._run_script(script_name)
@@ -98,40 +101,43 @@ def scrape_messages(script_name, file_prefix="thread"):
 
     messages = parse_raw_data(raw_data)
     print(f"Parsed {len(messages)} messages.")
-    
+
     threads = group_into_threads(messages)
     print(f"Identified {len(threads)} unique threads.")
-    
+
     # Save first 50 threads
     top_threads = threads[:50]
-    
+
     for i, thread in enumerate(top_threads):
         # Determine filename from subject of the first message
         first_msg = thread[0]
-        safe_subject = "".join([c for c in first_msg.get('subject', 'thread') if c.isalnum() or c in (' ', '-', '_')]).strip()[:50]
-        filename = f"{file_prefix}_{i+1}_{safe_subject}.txt"
+        safe_subject = "".join(
+            [c for c in first_msg.get("subject", "thread") if c.isalnum() or c in (" ", "-", "_")]
+        ).strip()[:50]
+        filename = f"{file_prefix}_{i + 1}_{safe_subject}.txt"
         filepath = os.path.join(OUTPUT_DIR, filename)
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
+
+        with open(filepath, "w", encoding="utf-8") as f:
             for msg in thread:
                 f.write(f"From: {msg.get('from')}\n")
                 f.write(f"Date: {msg.get('date')}\n")
                 f.write(f"Subject: {msg.get('subject')}\n")
                 f.write(f"Flag Status: {msg.get('flag_status', 'None')}\n")
                 f.write("-" * 20 + "\n")
-                f.write(msg.get('content') + "\n")
+                f.write(msg.get("content") + "\n")
                 f.write("=" * 80 + "\n\n")
-        
+
     print(f"Successfully saved {len(top_threads)} threads to {os.path.abspath(OUTPUT_DIR)}")
     return top_threads
 
-def run_scraper(mode='recent'):
-    if mode == 'recent':
+
+def run_scraper(mode="recent"):
+    if mode == "recent":
         print("--- Scraping Recent Emails ---")
-        return scrape_messages('get_recent_threads.scpt', file_prefix="recent")
-    elif mode == 'flagged':
+        return scrape_messages("get_recent_threads.scpt", file_prefix="recent")
+    elif mode == "flagged":
         print("--- Scraping Flagged Emails (Full Threads) ---")
-        return scrape_messages('get_flagged_threads.scpt', file_prefix="flagged")
+        return scrape_messages("get_flagged_threads.scpt", file_prefix="flagged")
     else:
         print(f"Unknown mode: {mode}")
         return []
