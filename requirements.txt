@@ -1,3 +1,4 @@
+certifi
 customtkinter
 PyYAML
 google-genai
