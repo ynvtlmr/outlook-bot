@@ -39,6 +39,10 @@ jobs:
       run: |
         uv sync --all-extras --dev
 
+    - name: Run Tests
+      run: |
+        uv run pytest --cov=src tests/
+
     - name: Build with PyInstaller
       run: |
         uv run pyinstaller outlook_bot.spec
