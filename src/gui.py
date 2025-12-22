@@ -149,15 +149,7 @@ class OutlookBotGUI(ctk.CTk):
         self.chk_ssl_verify = ctk.CTkCheckBox(tab, text="Disable SSL Verify (Insecure)", width=200, text_color="red")
         self.chk_ssl_verify.grid(row=2, column=2, padx=10, pady=10, sticky="w")
 
-        # Custom CA Bundle
-        lbl_ca = ctk.CTkLabel(tab, text="Custom CA Bundle:")
-        lbl_ca.grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        
-        self.entry_ca_bundle = ctk.CTkEntry(tab, width=300)
-        self.entry_ca_bundle.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
-        
-        self.btn_browse_ca = ctk.CTkButton(tab, text="Browse", width=60, command=self.browse_ca_bundle)
-        self.btn_browse_ca.grid(row=3, column=2, padx=10, pady=10, sticky="w")
+
 
         # Default Reply
         lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
@@ -223,9 +215,7 @@ class OutlookBotGUI(ctk.CTk):
         else:
             self.chk_ssl_verify.deselect()
 
-        # Custom CA Bundle
-        self.entry_ca_bundle.delete(0, "end")
-        self.entry_ca_bundle.insert(0, data.get("ssl_ca_bundle", "") or "")
+
 
         # Default Reply
         self.txt_default_reply.delete("0.0", "end")
@@ -279,14 +269,11 @@ class OutlookBotGUI(ctk.CTk):
             models_text = self.txt_models.get("0.0", "end").strip()
             models = [m.strip() for m in models_text.split("\n") if m.strip()]
             disable_ssl = bool(self.chk_ssl_verify.get())
-            ca_bundle = self.entry_ca_bundle.get().strip()
-
             data = {
                 "days_threshold": days,
                 "default_reply": default_reply,
                 "available_models": models,
-                "disable_ssl_verify": disable_ssl,
-                "ssl_ca_bundle": ca_bundle
+                "disable_ssl_verify": disable_ssl
             }
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(data, f)
@@ -447,14 +434,7 @@ class OutlookBotGUI(ctk.CTk):
             button.configure(fg_color="darkred", hover_color="#800000")
             self.log(f"[Error] {message}\n")
 
-    def browse_ca_bundle(self):
-        filename = filedialog.askopenfilename(
-            title="Select CA Bundle",
-            filetypes=[("Certificate Files", "*.pem *.crt *.cer"), ("All Files", "*.*")]
-        )
-        if filename:
-            self.entry_ca_bundle.delete(0, "end")
-            self.entry_ca_bundle.insert(0, filename)
+
 
 
 if __name__ == "__main__":

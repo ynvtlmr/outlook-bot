@@ -51,11 +51,9 @@ class LLMService:
                 # If disable_ssl is True, we pass verify=False to httpx
                 # If False, we see if a custom bundle is provided, otherwise certifi or default
                 
-                # Check for custom bundle in config
-                custom_bundle_path = load_ssl_config_helper(key="ssl_ca_bundle")
-                
                 # Use ssl_utils to get the best verify option (Ctx or Path)
-                verify_option = get_ssl_verify_option(disable_ssl, custom_bundle_path)
+                # Auto-discovery is now internal to ssl_utils
+                verify_option = get_ssl_verify_option(disable_ssl)
                 
                 # Global ENV Configuration for robustness (Fixes OpenAI and others)
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
@@ -511,18 +509,13 @@ class LLMService:
 
         try:
             disable_ssl = load_ssl_config_helper("disable_ssl_verify") or False
-            custom_bundle = load_ssl_config_helper("ssl_ca_bundle")
-
-            verify_option = get_ssl_verify_option(disable_ssl, custom_bundle)
+            # Auto-discovery is now internal to ssl_utils
+            verify_option = get_ssl_verify_option(disable_ssl)
             
             # Note: We aren't setting global ENVs here to avoid side effects during a simple "Test Connection" button press?
             # Actually, we SHOULD, because if test succeeds, we want subsequent calls (if any) to likely work. 
             # But usually test is isolated.
             
-            client = genai.Client(
-                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
-            )
-
             client = genai.Client(
                 api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
             )
