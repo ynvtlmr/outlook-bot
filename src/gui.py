@@ -144,6 +144,10 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days = ctk.CTkEntry(tab, width=100)
         self.entry_days.grid(row=2, column=1, padx=10, pady=10, sticky="w")
 
+        # Disable SSL Verify
+        self.chk_ssl_verify = ctk.CTkCheckBox(tab, text="Disable SSL Verify (Insecure)", width=200, text_color="red")
+        self.chk_ssl_verify.grid(row=2, column=2, padx=10, pady=10, sticky="w")
+
         # Default Reply
         lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
         lbl_reply.grid(row=3, column=0, padx=10, pady=10, sticky="nw")
@@ -202,6 +206,12 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days.delete(0, "end")
         self.entry_days.insert(0, str(data.get("days_threshold", DAYS_THRESHOLD)))
 
+        # SSL Verify
+        if data.get("disable_ssl_verify", False):
+            self.chk_ssl_verify.select()
+        else:
+            self.chk_ssl_verify.deselect()
+
         # Default Reply
         self.txt_default_reply.delete("0.0", "end")
         self.txt_default_reply.insert("0.0", data.get("default_reply", DEFAULT_REPLY))
@@ -253,8 +263,14 @@ class OutlookBotGUI(ctk.CTk):
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
             models_text = self.txt_models.get("0.0", "end").strip()
             models = [m.strip() for m in models_text.split("\n") if m.strip()]
+            disable_ssl = bool(self.chk_ssl_verify.get())
 
-            data = {"days_threshold": days, "default_reply": default_reply, "available_models": models}
+            data = {
+                "days_threshold": days,
+                "default_reply": default_reply,
+                "available_models": models,
+                "disable_ssl_verify": disable_ssl
+            }
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(data, f)
         except ValueError:

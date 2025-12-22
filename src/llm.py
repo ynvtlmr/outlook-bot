@@ -9,6 +9,21 @@ from google.genai import types
 from openai import OpenAI
 
 
+import yaml
+
+
+def load_ssl_config_helper():
+    """Loads disable_ssl_verify from config.yaml"""
+    try:
+        config_path = "config.yaml"
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                data = yaml.safe_load(f) or {}
+                return data.get("disable_ssl_verify", False)
+    except Exception:
+        pass
+    return False
+
 class LLMService:
     def __init__(self):
         self.gemini_key = os.getenv("GEMINI_API_KEY")
@@ -25,11 +40,20 @@ class LLMService:
         self._discover_models()
 
     def _init_clients(self):
+        disable_ssl = load_ssl_config_helper()
+        if disable_ssl:
+            print("[Security Warning] SSL Verification is DISABLED via config.yaml")
+
         # Gemini
         if self.gemini_key:
             try:
+                # If disable_ssl is True, we pass verify=False to httpx
+                # If False, we use certifi (recommended) or default
+                verify_option = False if disable_ssl else certifi.where()
+                
                 self.gemini_client = genai.Client(
-                    api_key=self.gemini_key, http_options=types.HttpOptions(client_args={"verify": certifi.where()})
+                    api_key=self.gemini_key, 
+                    http_options=types.HttpOptions(client_args={"verify": verify_option})
                 )
             except Exception as e:
                 print(f"Warning: Failed to initialize Gemini client: {e}")
@@ -37,9 +61,36 @@ class LLMService:
         # OpenAI
         if self.openai_key:
             try:
+                # OpenAI client handles disable_ssl via http_client arg usually, 
+                # but standard init doesn't easily expose it without custom transport.
+                # However, for now we focus on Gemini which is the primary issue.
                 self.openai_client = OpenAI(api_key=self.openai_key)
             except Exception as e:
                 print(f"Warning: Failed to initialize OpenAI client: {e}")
+
+    # ... (rest of class)
+
+    @staticmethod
+    def test_gemini_connection(api_key):
+        """
+        Tests connectivity to Gemini API with the provided key.
+        Returns (success: bool, message: str)
+        """
+        if not api_key:
+            return False, "API Key is empty."
+
+        try:
+            disable_ssl = load_ssl_config_helper()
+            verify_option = False if disable_ssl else certifi.where()
+
+            client = genai.Client(
+                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
+            )
+            # Lightweight call to list models
+            list(client.models.list())
+            return True, "Connection Successful!"
+        except Exception as e:
+            return False, f"Connection Failed: {str(e)}"
 
     def _discover_models(self):
         """
@@ -438,8 +489,11 @@ class LLMService:
             return False, "API Key is empty."
 
         try:
+            disable_ssl = load_ssl_config_helper()
+            verify_option = False if disable_ssl else certifi.where()
+
             client = genai.Client(
-                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": certifi.where()})
+                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
             )
             # Lightweight call to list models
             list(client.models.list())
