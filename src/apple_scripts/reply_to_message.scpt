@@ -162,8 +162,18 @@ on run argv
 			     end try
 			end repeat
 			
-			-- 5. Open it
-			open newDraft
+			-- 5. Save and Close (window opens automatically on creation)
+			-- We must close 'window 1' assuming the new draft is focused.
+			try
+			    close window 1 saving yes
+			on error
+			    -- Fallback: try closing the message itself if supported in future
+			    try 
+			        save newDraft
+			        close newDraft
+			    on error
+			    end try
+			end try
 			
 			return "Success: Draft created."
 			
