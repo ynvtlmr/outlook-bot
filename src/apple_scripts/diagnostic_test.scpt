@@ -53,6 +53,28 @@ on run argv
                 close window 1 saving no
                 return storedContent
                 
+            else if testType is "object_save" then
+                -- TEST: Save via Object Reference (avoiding 'window 1')
+                set content of newDraft to payload
+                delay 0.5
+                
+                -- Try direct object manipulation
+                save newDraft
+                -- We won't close it immediately so we can read it back to verify, 
+                -- or we assume 'save' worked.
+                -- Let's read back to be sure it took.
+                set storedContent to content of newDraft
+                
+                -- Now try closing object directly
+                try
+                    close newDraft saving yes
+                on error
+                    -- Some versions of Outlook don't support 'close message', must use window
+                    close window 1 saving yes
+                end try
+                
+                return storedContent
+                
             else
                 -- Standard write
                 set content of newDraft to payload
