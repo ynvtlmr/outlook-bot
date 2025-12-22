@@ -34,6 +34,25 @@ on run argv
                 close window 1 saving no
                 return storedContent
                 
+            else if testType is "append" then
+                -- SIMULATE REPLY: Create with content, then Read-Modify-Write
+                set content of newDraft to "Original Signature"
+                delay 0.5
+                
+                -- Read back
+                set oldContent to content of newDraft
+                
+                -- Prepend (Simulating the reply logic)
+                set newContent to payload & "<br>" & oldContent
+                set content of newDraft to newContent
+                delay 0.5
+                
+                set storedContent to content of newDraft
+                
+                -- Cleanup
+                close window 1 saving no
+                return storedContent
+                
             else
                 -- Standard write
                 set content of newDraft to payload

@@ -81,6 +81,31 @@ def run_tests():
         log(test_name, "PASS", "Immediate read-back matched.")
     else:
         log(test_name, "FAIL", f"Expected '{payload}', got '{result}'")
+
+    # TEST 6: Complex Arguments (Quotes/Newlines)
+    test_name = "TEST 6: Complex Arguments (Escaping)"
+    # Strings that often break shell or applescript parsing
+    payload = 'Text with "double quotes", \'single quotes\', and\nNewlines.'
+    result = run_applescript("basic", payload)
+    
+    # We expect exact match or match with minor normalization?
+    # Python subprocess handles the shell escaping, but AppleScript might interpret things.
+    if 'Double quotes' in result or '"double quotes"' in result:
+        log(test_name, "PASS", "Quotes preserved correctly.")
+    else:
+        log(test_name, "FAIL", f"Arguments likely mangled. Got: {result}")
+
+    # TEST 7: Append Workflow (Simulate Reply)
+    test_name = "TEST 7: Append Workflow (Read-Modify-Write)"
+    payload = "My Reply Text"
+    result = run_applescript("append", payload)
+    
+    # We expect "My Reply Text<br>Original Signature" (or similar HTML normalized)
+    # The return is the Full Content.
+    if "My Reply Text" in result and "Original Signature" in result:
+        log(test_name, "PASS", "Append logic succeeded.")
+    else:
+        log(test_name, "FAIL", f"Append failed. Result: {result}")
         
     print("="*60)
 
