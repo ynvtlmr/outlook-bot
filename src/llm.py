@@ -9,21 +9,11 @@ from google.genai import types
 from openai import OpenAI
 
 
-import yaml
+
 from ssl_utils import get_ssl_verify_option
 
 
-def load_ssl_config_helper(key="disable_ssl_verify"):
-    """Loads a key from config.yaml, default None/False"""
-    try:
-        config_path = "config.yaml"
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                data = yaml.safe_load(f) or {}
-                return data.get(key)
-    except Exception:
-        pass
-    return None
+
 
 class LLMService:
     def __init__(self):
@@ -41,19 +31,12 @@ class LLMService:
         self._discover_models()
 
     def _init_clients(self):
-        disable_ssl = load_ssl_config_helper("disable_ssl_verify") or False
-        if disable_ssl:
-            print("[Security Warning] SSL Verification is DISABLED via config.yaml")
-
         # Gemini
         if self.gemini_key:
             try:
-                # If disable_ssl is True, we pass verify=False to httpx
-                # If False, we see if a custom bundle is provided, otherwise certifi or default
-                
-                # Use ssl_utils to get the best verify option (Ctx or Path)
+                # Use ssl_utils to get the best verify option (Path)
                 # Auto-discovery is now internal to ssl_utils
-                verify_option = get_ssl_verify_option(disable_ssl)
+                verify_option = get_ssl_verify_option()
                 
                 # Global ENV Configuration for robustness (Fixes OpenAI and others)
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
@@ -70,10 +53,7 @@ class LLMService:
                     http_options=types.HttpOptions(client_args={"verify": verify_option})
                 )
                 
-                self.gemini_client = genai.Client(
-                    api_key=self.gemini_key, 
-                    http_options=types.HttpOptions(client_args={"verify": verify_option})
-                )
+
             except Exception as e:
                 print(f"Warning: Failed to initialize Gemini client: {e}")
 
@@ -508,9 +488,8 @@ class LLMService:
             return False, "API Key is empty."
 
         try:
-            disable_ssl = load_ssl_config_helper("disable_ssl_verify") or False
             # Auto-discovery is now internal to ssl_utils
-            verify_option = get_ssl_verify_option(disable_ssl)
+            verify_option = get_ssl_verify_option()
             
             # Note: We aren't setting global ENVs here to avoid side effects during a simple "Test Connection" button press?
             # Actually, we SHOULD, because if test succeeds, we want subsequent calls (if any) to likely work. 

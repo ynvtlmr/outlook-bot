@@ -110,6 +110,19 @@ We use `ty` (or static analysis tools) for type safety.
 ```bash
 uv run ty check .
 ```
+### Testing
+Run the automated test suite with `pytest`:
+```bash
+# Run all tests
+uv run pytest
+
+# Run integration tests only
+uv run pytest tests/integration/
+
+# Run unit tests only
+uv run pytest tests/unit/
+```
+
 ---
 
 ## Building for macOS

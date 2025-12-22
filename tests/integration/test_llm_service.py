@@ -33,21 +33,4 @@ def test_generate_reply_fallback(mocker):
     reply = service.generate_reply("prompt", "system")
     assert reply == "Generated Reply" 
 
-def test_ssl_disable_logic(mocker):
-    # Mock config helper to return True
-    mocker.patch("llm.load_ssl_config_helper", return_value=True)
-    mocker.patch.dict("os.environ", {"GEMINI_API_KEY": "fake_key"})
-    
-    mock_genai = mocker.patch("llm.genai.Client")
-    
-    service = LLMService()
-    
-    # Check if verify=False was passed
-    args, kwargs = mock_genai.call_args
-    # http_options is inside kwargs?
-    # Signature: genai.Client(api_key=..., http_options=...)
-    # We inspect kwargs['http_options'].client_args['verify']
-    http_opts = kwargs.get('http_options')
-    # It's an object, so we might need check properties or mock the class types.HttpOptions
-    # Simpler: just check if verify=False is ANYWHERE in the call or if we hit the right branch in logic.
-    assert True # Placeholder, hard to inspect object attributes deeply without more mocks
+

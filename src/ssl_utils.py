@@ -71,25 +71,13 @@ def create_merged_cert_bundle() -> str:
         return certifi.where()
 
 
-def get_ssl_verify_option(disable_ssl: bool = False) -> Union[ssl.SSLContext, str]:
+def get_ssl_verify_option() -> str:
     """
     Returns the SSL verify option to use for HTTP clients.
     
-    Args:
-        disable_ssl: If True, returns SSL context with CERT_NONE (disables verification)
-        
     Returns:
-        SSL context with CERT_NONE if SSL should be disabled
-        Path to certificate bundle (merged with Zscaler if available) otherwise
+        Path to certificate bundle (merged with Zscaler if available)
     """
-    if disable_ssl:
-        # Create SSL context that completely disables verification
-        # This is necessary because httpx doesn't always respect verify=False boolean
-        no_verify_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        no_verify_context.check_hostname = False
-        no_verify_context.verify_mode = ssl.CERT_NONE
-        return no_verify_context
-    
     # Try to create merged bundle using auto-discovery
     merged_bundle = create_merged_cert_bundle()
     return merged_bundle
