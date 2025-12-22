@@ -9,6 +9,22 @@ from google.genai import types
 from openai import OpenAI
 
 
+import yaml
+from ssl_utils import get_ssl_verify_option
+
+
+def load_ssl_config_helper(key="disable_ssl_verify"):
+    """Loads a key from config.yaml, default None/False"""
+    try:
+        config_path = "config.yaml"
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                data = yaml.safe_load(f) or {}
+                return data.get(key)
+    except Exception:
+        pass
+    return None
+
 class LLMService:
     def __init__(self):
         self.gemini_key = os.getenv("GEMINI_API_KEY")
@@ -25,11 +41,40 @@ class LLMService:
         self._discover_models()
 
     def _init_clients(self):
+        disable_ssl = load_ssl_config_helper("disable_ssl_verify") or False
+        if disable_ssl:
+            print("[Security Warning] SSL Verification is DISABLED via config.yaml")
+
         # Gemini
         if self.gemini_key:
             try:
+                # If disable_ssl is True, we pass verify=False to httpx
+                # If False, we see if a custom bundle is provided, otherwise certifi or default
+                
+                # Check for custom bundle in config
+                custom_bundle_path = load_ssl_config_helper(key="ssl_ca_bundle")
+                
+                # Use ssl_utils to get the best verify option (Ctx or Path)
+                verify_option = get_ssl_verify_option(disable_ssl, custom_bundle_path)
+                
+                # Global ENV Configuration for robustness (Fixes OpenAI and others)
+                if isinstance(verify_option, str) and os.path.exists(verify_option):
+                    print(f"Global SSL Configuration: Setting SSL_CERT_FILE to {verify_option}")
+                    os.environ["SSL_CERT_FILE"] = verify_option
+                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                elif isinstance(verify_option, ssl.SSLContext):
+                    print("Global SSL Configuration: verify_option is a Context (likely disabled), cannot set ENV path.")
+                    # If strictly disabled, we can't easily force OpenAI via ENV to be disabled without code.
+                    # But if the user selected 'disable', we pass context to Gemini below.
+                
                 self.gemini_client = genai.Client(
-                    api_key=self.gemini_key, http_options=types.HttpOptions(client_args={"verify": certifi.where()})
+                    api_key=self.gemini_key, 
+                    http_options=types.HttpOptions(client_args={"verify": verify_option})
+                )
+                
+                self.gemini_client = genai.Client(
+                    api_key=self.gemini_key, 
+                    http_options=types.HttpOptions(client_args={"verify": verify_option})
                 )
             except Exception as e:
                 print(f"Warning: Failed to initialize Gemini client: {e}")
@@ -37,9 +82,36 @@ class LLMService:
         # OpenAI
         if self.openai_key:
             try:
+                # OpenAI client handles disable_ssl via http_client arg usually, 
+                # but standard init doesn't easily expose it without custom transport.
+                # However, for now we focus on Gemini which is the primary issue.
                 self.openai_client = OpenAI(api_key=self.openai_key)
             except Exception as e:
                 print(f"Warning: Failed to initialize OpenAI client: {e}")
+
+    # ... (rest of class)
+
+    @staticmethod
+    def test_gemini_connection(api_key):
+        """
+        Tests connectivity to Gemini API with the provided key.
+        Returns (success: bool, message: str)
+        """
+        if not api_key:
+            return False, "API Key is empty."
+
+        try:
+            disable_ssl = load_ssl_config_helper()
+            verify_option = False if disable_ssl else certifi.where()
+
+            client = genai.Client(
+                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
+            )
+            # Lightweight call to list models
+            list(client.models.list())
+            return True, "Connection Successful!"
+        except Exception as e:
+            return False, f"Connection Failed: {str(e)}"
 
     def _discover_models(self):
         """
@@ -438,8 +510,21 @@ class LLMService:
             return False, "API Key is empty."
 
         try:
+            disable_ssl = load_ssl_config_helper("disable_ssl_verify") or False
+            custom_bundle = load_ssl_config_helper("ssl_ca_bundle")
+
+            verify_option = get_ssl_verify_option(disable_ssl, custom_bundle)
+            
+            # Note: We aren't setting global ENVs here to avoid side effects during a simple "Test Connection" button press?
+            # Actually, we SHOULD, because if test succeeds, we want subsequent calls (if any) to likely work. 
+            # But usually test is isolated.
+            
             client = genai.Client(
-                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": certifi.where()})
+                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
+            )
+
+            client = genai.Client(
+                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
             )
             # Lightweight call to list models
             list(client.models.list())

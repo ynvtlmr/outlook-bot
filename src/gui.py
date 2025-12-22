@@ -3,6 +3,7 @@ import sys
 import threading
 
 import customtkinter as ctk
+from tkinter import filedialog
 import dotenv
 import yaml
 
@@ -144,21 +145,35 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days = ctk.CTkEntry(tab, width=100)
         self.entry_days.grid(row=2, column=1, padx=10, pady=10, sticky="w")
 
+        # Disable SSL Verify
+        self.chk_ssl_verify = ctk.CTkCheckBox(tab, text="Disable SSL Verify (Insecure)", width=200, text_color="red")
+        self.chk_ssl_verify.grid(row=2, column=2, padx=10, pady=10, sticky="w")
+
+        # Custom CA Bundle
+        lbl_ca = ctk.CTkLabel(tab, text="Custom CA Bundle:")
+        lbl_ca.grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        
+        self.entry_ca_bundle = ctk.CTkEntry(tab, width=300)
+        self.entry_ca_bundle.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
+        
+        self.btn_browse_ca = ctk.CTkButton(tab, text="Browse", width=60, command=self.browse_ca_bundle)
+        self.btn_browse_ca.grid(row=3, column=2, padx=10, pady=10, sticky="w")
+
         # Default Reply
         lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
-        lbl_reply.grid(row=3, column=0, padx=10, pady=10, sticky="nw")
+        lbl_reply.grid(row=4, column=0, padx=10, pady=10, sticky="nw")
         self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
-        self.txt_default_reply.grid(row=3, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        self.txt_default_reply.grid(row=4, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
 
         # Models
         lbl_models = ctk.CTkLabel(tab, text="Detected Models:")
-        lbl_models.grid(row=4, column=0, padx=10, pady=10, sticky="nw")
+        lbl_models.grid(row=5, column=0, padx=10, pady=10, sticky="nw")
         self.txt_models = ctk.CTkTextbox(tab, height=100)
-        self.txt_models.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+        self.txt_models.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
 
         # Refresh Models Button
         self.btn_refresh_models = ctk.CTkButton(tab, text="Refresh Models", command=self.refresh_models_list)
-        self.btn_refresh_models.grid(row=4, column=2, padx=10, pady=10, sticky="nw")
+        self.btn_refresh_models.grid(row=5, column=2, padx=10, pady=10, sticky="nw")
 
     def setup_prompt_tab(self):
         tab = self.tab_view.tab("System Prompt")
@@ -201,6 +216,16 @@ class OutlookBotGUI(ctk.CTk):
         # Days
         self.entry_days.delete(0, "end")
         self.entry_days.insert(0, str(data.get("days_threshold", DAYS_THRESHOLD)))
+
+        # SSL Verify
+        if data.get("disable_ssl_verify", False):
+            self.chk_ssl_verify.select()
+        else:
+            self.chk_ssl_verify.deselect()
+
+        # Custom CA Bundle
+        self.entry_ca_bundle.delete(0, "end")
+        self.entry_ca_bundle.insert(0, data.get("ssl_ca_bundle", "") or "")
 
         # Default Reply
         self.txt_default_reply.delete("0.0", "end")
@@ -253,8 +278,16 @@ class OutlookBotGUI(ctk.CTk):
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
             models_text = self.txt_models.get("0.0", "end").strip()
             models = [m.strip() for m in models_text.split("\n") if m.strip()]
+            disable_ssl = bool(self.chk_ssl_verify.get())
+            ca_bundle = self.entry_ca_bundle.get().strip()
 
-            data = {"days_threshold": days, "default_reply": default_reply, "available_models": models}
+            data = {
+                "days_threshold": days,
+                "default_reply": default_reply,
+                "available_models": models,
+                "disable_ssl_verify": disable_ssl,
+                "ssl_ca_bundle": ca_bundle
+            }
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(data, f)
         except ValueError:
@@ -413,6 +446,15 @@ class OutlookBotGUI(ctk.CTk):
         else:
             button.configure(fg_color="darkred", hover_color="#800000")
             self.log(f"[Error] {message}\n")
+
+    def browse_ca_bundle(self):
+        filename = filedialog.askopenfilename(
+            title="Select CA Bundle",
+            filetypes=[("Certificate Files", "*.pem *.crt *.cer"), ("All Files", "*.*")]
+        )
+        if filename:
+            self.entry_ca_bundle.delete(0, "end")
+            self.entry_ca_bundle.insert(0, filename)
 
 
 if __name__ == "__main__":
