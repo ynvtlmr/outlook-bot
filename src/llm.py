@@ -78,10 +78,22 @@ class LLMService:
         # OpenAI
         if self.openai_key:
             try:
-                # OpenAI client handles disable_ssl via http_client arg usually, 
-                # but standard init doesn't easily expose it without custom transport.
-                # However, for now we focus on Gemini which is the primary issue.
-                self.openai_client = OpenAI(api_key=self.openai_key)
+                # Use the same SSL configuration approach as test_openai_connection
+                verify_option = get_ssl_verify_option(disable_ssl)
+                
+                if isinstance(verify_option, str) and os.path.exists(verify_option):
+                    # Use certificate bundle via environment variables
+                    os.environ["SSL_CERT_FILE"] = verify_option
+                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                    self.openai_client = OpenAI(api_key=self.openai_key)
+                elif isinstance(verify_option, ssl.SSLContext):
+                    # For CERT_NONE, use custom httpx client
+                    import httpx
+                    httpx_client = httpx.Client(verify=verify_option)
+                    self.openai_client = OpenAI(api_key=self.openai_key, http_client=httpx_client)
+                else:
+                    # Default initialization
+                    self.openai_client = OpenAI(api_key=self.openai_key)
             except Exception as e:
                 print(f"Warning: Failed to initialize OpenAI client: {e}")
 
@@ -170,7 +182,9 @@ class LLMService:
         # 2. OpenAI Discovery
         if self.openai_client:
             try:
+                print("  -> Querying OpenAI for available models...")
                 models_page = self.openai_client.models.list()
+                print(f"  -> Received {len(models_page.data)} models from OpenAI")
                 for m in models_page.data:
                     mid = m.id
                     lower_id = mid.lower()
@@ -205,9 +219,15 @@ class LLMService:
                         continue
 
                     self.available_models.append({"id": mid, "provider": "openai"})
+                
+                if len(self.available_models) == 0:
+                    print(f"  -> Warning: No OpenAI models passed filtering criteria")
+                    print(f"  -> Consider checking filter rules if models are expected")
 
             except Exception as e:
                 print(f"  -> OpenAI model discovery failed: {e}")
+                import traceback
+                print(f"  -> Traceback: {traceback.format_exc()}")
 
         # Sort models by estimated cost/efficiency
         self._sort_models_by_cost()
