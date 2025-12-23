@@ -49,8 +49,9 @@ on run argv
 			-- 2. Create Reply (This handles the 'From' account automatically)
 			set newDraft to reply to targetMsg
 			
-			-- Wait for draft window to fully open
-			delay 2.0
+			-- Wait for draft window to fully open and initialize
+			-- Increased delay for "cold start" - first draft needs more time
+			delay 3.5
 			
 			-- 2.1 Set Content - Using UI Automation (keystrokes) to bypass content property limitations
 			try
@@ -65,26 +66,40 @@ on run argv
 			        -- Use System Events to type the text directly into the draft window
 			        tell application "System Events"
 			            tell process "Microsoft Outlook"
-			                -- Activate the window
+			                -- Activate the window and ensure it's ready
 			                set frontmost to true
-			                delay 0.5
+			                delay 1.0
+			                
+			                -- Verify window exists and is ready
+			                try
+			                    set winCount to count of windows
+			                    if winCount is 0 then
+			                        -- Window not ready yet, wait more
+			                        delay 1.5
+			                    end if
+			                on error
+			                    -- If we can't check, wait a bit more to be safe
+			                    delay 1.0
+			                end try
 			                
 			                -- Find the message body field and type the text
 			                try
 			                    -- Method 1: Try to find and click the body text field
 			                    set bodyField to first text area of window 1
 			                    click bodyField
-			                    delay 0.3
+			                    delay 0.5
 			                    keystroke plainTextBody
 			                on error
 				            -- Method 2: Just type at the current focus (should be body if window just opened)
+				            delay 0.5
 				            keystroke plainTextBody
 			                end try
 			            end tell
 			        end tell
 			        
-			        -- Wait for typing to complete
-			        delay 1.0
+			        -- Wait longer for typing to complete and be processed by Outlook
+			        -- Longer delay ensures all keystrokes are fully processed before saving
+			        delay 2.0
 			    end if
 			on error e
 			    return "Error setting content via UI: " & e
