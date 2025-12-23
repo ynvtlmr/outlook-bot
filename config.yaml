@@ -7,3 +7,4 @@ available_models:
 - gemini-2.5-flash
 days_threshold: 5
 default_reply: Thank you for your email. I will review it and get back to you shortly.
+disable_ssl_verify: true

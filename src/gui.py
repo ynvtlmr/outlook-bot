@@ -258,15 +258,29 @@ class OutlookBotGUI(ctk.CTk):
 
         # 1. Save YAML
         try:
+            # Read existing config to preserve any fields we don't manage
+            existing_data = {}
+            if os.path.exists(CONFIG_PATH):
+                try:
+                    with open(CONFIG_PATH, "r") as f:
+                        existing_data = yaml.safe_load(f) or {}
+                except Exception:
+                    pass  # If read fails, start fresh
+            
             days = int(self.entry_days.get())
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
             models_text = self.txt_models.get("0.0", "end").strip()
             models = [m.strip() for m in models_text.split("\n") if m.strip()]
-            data = {
+            
+            # Update only the fields we manage, preserve others
+            data = existing_data.copy()
+            data.update({
                 "days_threshold": days,
                 "default_reply": default_reply,
                 "available_models": models
-            }
+            })
+            # Note: disable_ssl_verify is now hardcoded in llm.py and not stored in config.yaml
+            
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(data, f)
         except ValueError:

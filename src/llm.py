@@ -14,16 +14,13 @@ from ssl_utils import get_ssl_verify_option
 
 
 def load_ssl_config_helper():
-    """Loads disable_ssl_verify from config.yaml"""
-    try:
-        config_path = "config.yaml"
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                data = yaml.safe_load(f) or {}
-                return data.get("disable_ssl_verify", False)
-    except Exception:
-        pass
-    return False
+    """
+    Returns SSL verification status.
+    HARDCODED: Always returns True (SSL verification disabled) due to Zscaler corporate proxy issues.
+    This cannot be configured via config.yaml to prevent accidental removal.
+    """
+    # Hardcoded to True - SSL verification must be disabled for Zscaler compatibility
+    return True
 
 
 
