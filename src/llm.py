@@ -316,9 +316,10 @@ class LLMService:
         self._discover_models()
         return self.get_models_list()
 
-    def generate_reply(self, email_body, system_prompt):
+    def generate_reply(self, email_body, system_prompt, preferred_model=None):
         """
         Tries to generate a reply using available models in order.
+        If preferred_model is specified, tries that model first.
         """
         if not self.available_models:
             print("Error: No available models to generate reply.")
@@ -326,7 +327,23 @@ class LLMService:
 
         prompt = f"{system_prompt}\n\nEmail Thread:\n{email_body}\n\nResponse:"
 
-        for model_entry in self.available_models:
+        # Reorder models to try preferred_model first if specified
+        models_to_try = self.available_models.copy()
+        if preferred_model:
+            # Find the preferred model and move it to the front
+            preferred_entry = None
+            for i, model_entry in enumerate(models_to_try):
+                if model_entry["id"] == preferred_model:
+                    preferred_entry = models_to_try.pop(i)
+                    break
+            
+            if preferred_entry:
+                models_to_try.insert(0, preferred_entry)
+                print(f"[Info] Using preferred model: {preferred_model}")
+            else:
+                print(f"[Warning] Preferred model '{preferred_model}' not found. Using default order.")
+
+        for model_entry in models_to_try:
             model_id = model_entry["id"]
             provider = model_entry["provider"]
 
@@ -377,12 +394,29 @@ class LLMService:
         )
         return completion.choices[0].message.content.strip() if completion.choices[0].message.content else ""
 
-    def generate_batch_replies(self, email_batch, system_prompt):
+    def generate_batch_replies(self, email_batch, system_prompt, preferred_model=None):
         """
         Generates batch replies. Tries to use the JSON-list prompting strategy.
+        If preferred_model is specified, tries that model first.
         """
         if not self.available_models:
             return {}
+        
+        # Reorder models to try preferred_model first if specified
+        models_to_try = self.available_models.copy()
+        if preferred_model:
+            # Find the preferred model and move it to the front
+            preferred_entry = None
+            for i, model_entry in enumerate(models_to_try):
+                if model_entry["id"] == preferred_model:
+                    preferred_entry = models_to_try.pop(i)
+                    break
+            
+            if preferred_entry:
+                models_to_try.insert(0, preferred_entry)
+                print(f"[Info] Using preferred model for batch: {preferred_model}")
+            else:
+                print(f"[Warning] Preferred model '{preferred_model}' not found. Using default order.")
 
         # Prepare the centralized prompt (same as in genai.py)
         prompt_intro = (
@@ -404,7 +438,7 @@ class LLMService:
         full_json_input = json.dumps(prompt_batch, indent=2)
         full_prompt = prompt_intro + full_json_input
 
-        for model_entry in self.available_models:
+        for model_entry in models_to_try:
             model_id = model_entry["id"]
             provider = model_entry["provider"]
 

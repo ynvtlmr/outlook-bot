@@ -7,3 +7,5 @@ If the email does not have any recent response from anyone other than you, ask f
 Do not use flowery language.
 Make sure all emails start with a greeting. (eg: `Hello [name].`)
 Sign off with "Itamar".
+
+Make sure to read the entire email thread. make sure to reply to the person we are responding to, who should be the last person who wrote something in the thread.

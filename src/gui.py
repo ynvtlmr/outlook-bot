@@ -155,15 +155,18 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
         self.txt_default_reply.grid(row=4, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
 
-        # Models
-        lbl_models = ctk.CTkLabel(tab, text="Detected Models:")
-        lbl_models.grid(row=5, column=0, padx=10, pady=10, sticky="nw")
-        self.txt_models = ctk.CTkTextbox(tab, height=100)
-        self.txt_models.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
+        # Model Selection
+        lbl_model = ctk.CTkLabel(tab, text="Preferred Model:")
+        lbl_model.grid(row=5, column=0, padx=10, pady=10, sticky="nw")
+        self.combo_model = ctk.CTkComboBox(tab, state="readonly", command=self.on_model_selected)
+        self.combo_model.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
 
         # Refresh Models Button
         self.btn_refresh_models = ctk.CTkButton(tab, text="Refresh Models", command=self.refresh_models_list)
         self.btn_refresh_models.grid(row=5, column=2, padx=10, pady=10, sticky="nw")
+        
+        # Store available models list for dropdown
+        self.available_models_list = []
 
     def setup_prompt_tab(self):
         tab = self.tab_view.tab("System Prompt")
@@ -233,11 +236,17 @@ class OutlookBotGUI(ctk.CTk):
         except OSError as e:
             self.log(f"[Error] Failed to load .env: {e}\n")
 
-        # 3. Detect Models (Use the service)
+        # 3. Load Preferred Model
+        preferred_model = data.get("preferred_model", "")
+        if preferred_model:
+            # Will be set after models are loaded
+            pass
+        
+        # 4. Detect Models (Use the service)
         # We delay this slightly or run it now if we have keys
-        self.refresh_models_list()
+        self.refresh_models_list(preferred_model)
 
-        # 3. Load System Prompt
+        # 5. Load System Prompt
         try:
             if os.path.exists(SYSTEM_PROMPT_PATH):
                 with open(SYSTEM_PROMPT_PATH, "r") as f:
@@ -247,7 +256,7 @@ class OutlookBotGUI(ctk.CTk):
         except OSError as e:
             self.log(f"[Error] Failed to load system_prompt.txt: {e}\n")
 
-        # 4. Auto-Test Connections if keys exist
+        # 6. Auto-Test Connections if keys exist
         if self.entry_api_key.get().strip():
             self.test_gemini()
         if self.entry_openai_key.get().strip():
@@ -269,15 +278,14 @@ class OutlookBotGUI(ctk.CTk):
             
             days = int(self.entry_days.get())
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
-            models_text = self.txt_models.get("0.0", "end").strip()
-            models = [m.strip() for m in models_text.split("\n") if m.strip()]
+            preferred_model = self.combo_model.get()
             
             # Update only the fields we manage, preserve others
             data = existing_data.copy()
             data.update({
                 "days_threshold": days,
                 "default_reply": default_reply,
-                "available_models": models
+                "preferred_model": preferred_model
             })
             # Note: disable_ssl_verify is now hardcoded in llm.py and not stored in config.yaml
             
@@ -378,7 +386,7 @@ class OutlookBotGUI(ctk.CTk):
             # config.should_stop = True (if we implemented that)
             pass
 
-    def refresh_models_list(self):
+    def refresh_models_list(self, preferred_model=None):
         self.log("[Info] Detecting available models...\n")
         try:
             # Re-read keys from entry (in case user typed but didn't save yet,
@@ -392,15 +400,31 @@ class OutlookBotGUI(ctk.CTk):
 
             service = llm.LLMService()
             models = service.get_models_list()
+            
+            # Store models list
+            self.available_models_list = models
 
-            self.txt_models.configure(state="normal")
-            self.txt_models.delete("0.0", "end")
-            self.txt_models.insert("0.0", "\n".join(models))
-            self.txt_models.configure(state="disabled")  # Make Read-Only
-
-            self.log(f"[Info] Found {len(models)} models.\n")
+            # Update dropdown
+            if models:
+                self.combo_model.configure(values=models)
+                # Set preferred model if provided, otherwise use first model
+                if preferred_model and preferred_model in models:
+                    self.combo_model.set(preferred_model)
+                else:
+                    self.combo_model.set(models[0])
+                self.log(f"[Info] Found {len(models)} models. Selected: {self.combo_model.get()}\n")
+            else:
+                self.combo_model.configure(values=["No models available"])
+                self.combo_model.set("No models available")
+                self.log(f"[Warning] No models detected. Please check API keys.\n")
         except Exception as e:
             self.log(f"[Error] Failed to detect models: {e}\n")
+            self.combo_model.configure(values=["Error loading models"])
+            self.combo_model.set("Error loading models")
+    
+    def on_model_selected(self, choice):
+        """Called when user selects a model from the dropdown."""
+        self.log(f"[Info] Model selection changed to: {choice}\n")
 
     def on_close(self):
         if self.is_running:
