@@ -21,11 +21,25 @@ on run
 			set latestDate to date "1/1/1900"
 			
 			repeat with msg in allDrafts
-			    -- For drafts, 'time sent' seems to be the creation/mod time
-			    set msgDate to time sent of msg
-			    if msgDate > latestDate then
-			        set latestDate to msgDate
-			        set latestMsg to msg
+			    -- For drafts, 'time sent' seems to be the creation/mod time, but may be missing
+			    set msgDate to missing value
+			    try
+			        set msgDate to time sent of msg
+			    on error
+			        -- Some drafts may not have 'time sent'; try 'time received' as a fallback
+			        try
+			            set msgDate to time received of msg
+			        on error
+			            -- If neither timestamp is available, skip this draft
+			            set msgDate to missing value
+			        end try
+			    end try
+			    
+			    if msgDate is not missing value then
+			        if msgDate > latestDate then
+			            set latestDate to msgDate
+			            set latestMsg to msg
+			        end if
 			    end if
 			end repeat
 			
