@@ -222,30 +222,30 @@ class LLMService:
 
     def _sort_models_by_cost(self):
         """
-        Sorts self.available_models based on a heuristic of cost/speed + version freshness.
+        Sorts self.available_models based on capability (most capable first).
 
-        Sort Keys:
-        1. Priority (Ascending): 0 (Cheapest) -> 1 (Very Cheap) -> ...
-        2. Version (Ascending): Older versions (2.5, 4.1, 5) preferred within same priority.
+        Sort Keys (reversed for most capable first):
+        1. Priority (Descending): 3 (Most Capable) -> 2 -> 1 -> 0 (Least Capable)
+        2. Version (Descending): Newer/higher versions preferred within same priority.
         3. Name (Ascending): Alphabetical tie-break.
 
-        Priority 0 (Cheapest): Gemini Lite, GPT-4o-mini, GPT-5-mini
-        Priority 1 (Very Cheap): Gemini Flash
-        Priority 2 (Cheap): GPT-3.5-Turbo
-        Priority 3: Others
+        Priority 0 (Least Capable): Gemini Lite, GPT-4o-mini, GPT-5-mini
+        Priority 1 (Very Capable): Gemini Flash
+        Priority 2 (Capable): GPT-3.5-Turbo
+        Priority 3 (Most Capable): Others
         """
 
         def get_sort_key(model_entry):
             mid = model_entry["id"].lower()
 
             # --- 1. Priority Score ---
-            priority = 3  # Default
+            priority = 3  # Default (most capable)
 
             if "lite" in mid:
-                priority = 0
+                priority = 0  # Least capable
             # Avoid matching 'mini' inside 'gemini'
             elif "mini" in mid and "gemini" not in mid:
-                priority = 0
+                priority = 0  # Least capable
 
             elif "flash" in mid:
                 priority = 1
@@ -270,11 +270,11 @@ class LLMService:
             if "gpt-4o" in mid and version == 4.0:
                 version = 4.5  # Arbitrary bump to rank above standard 4.0 if needed
 
-            # We want ASCENDING version (Older first, as requested).
-            # Python sorts tuples element-wise.
-            # So we return +version.
+            # We want DESCENDING priority and version (most capable first).
+            # Python sorts tuples element-wise, so we negate to reverse order.
+            # Higher priority and version should come first, so we use negative values.
 
-            return (priority, version, mid)
+            return (-priority, -version, mid)
 
         # Debug sort keys
         # print("DEBUG SORT KEYS:")
@@ -321,6 +321,7 @@ class LLMService:
                     continue
 
                 if result:
+                    print(f"✓ Selected model: {provider}:{model_id}")
                     return result
             except Exception as e:
                 print(f"  -> Failed with {model_id}: {e}")
@@ -464,6 +465,7 @@ class LLMService:
                         results[item["id"]] = item["reply_text"]
 
                 if results:
+                    print(f"✓ Selected model for batch: {provider}:{model_id}")
                     return results
 
             except Exception as e:
