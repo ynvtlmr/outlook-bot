@@ -62,8 +62,12 @@ class LLMService:
                     os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                 elif isinstance(verify_option, ssl.SSLContext):
                     print("[Info] SSL verification disabled (using CERT_NONE context)")
-                    # If strictly disabled, we can't easily force OpenAI via ENV to be disabled without code.
-                    # But if the user selected 'disable', we pass context to Gemini below.
+                    # Clear env vars that might point to failing bundles when SSL is disabled
+                    # This ensures the SSL context is used instead of env vars
+                    if "SSL_CERT_FILE" in os.environ:
+                        del os.environ["SSL_CERT_FILE"]
+                    if "REQUESTS_CA_BUNDLE" in os.environ:
+                        del os.environ["REQUESTS_CA_BUNDLE"]
                 
                 self.gemini_client = genai.Client(
                     api_key=self.gemini_key, 
@@ -485,10 +489,18 @@ class LLMService:
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
             
-            # Set global ENVs for consistency
+            # Set global ENVs for consistency (only if using certificate bundle)
+            # If using SSL context (CERT_NONE), don't set env vars as they might interfere
             if isinstance(verify_option, str) and os.path.exists(verify_option):
                 os.environ["SSL_CERT_FILE"] = verify_option
                 os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+            elif isinstance(verify_option, ssl.SSLContext):
+                # When SSL is disabled, clear env vars that might point to failing bundles
+                # This ensures the SSL context is used instead of env vars
+                if "SSL_CERT_FILE" in os.environ:
+                    del os.environ["SSL_CERT_FILE"]
+                if "REQUESTS_CA_BUNDLE" in os.environ:
+                    del os.environ["REQUESTS_CA_BUNDLE"]
             
             client = genai.Client(
                 api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})

@@ -31,7 +31,7 @@ tell application "Microsoft Outlook"
 	
 	-- 2. For each conversation ID, fetch ALL messages from key folders
 	-- Scanning EVERY folder for EVERY conversation is O(N*M) and too slow.
-	-- We will look in "Inbox", "Sent Items", "Archive", and "Deleted Items"
+	-- We will look in "Inbox", "Sent Items", "Archive"
 	set searchFolderNames to {"Inbox", "Sent Items", "Archive"}
 	set searchFolders to {}
 	
