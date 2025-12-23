@@ -11,13 +11,9 @@ on run argv
 			set targetMsg to missing value
 			set targetID to msgID as integer
 			
-			-- Only searching in common folders for speed, or try Getting message by id directly if supported (often not direct)
-            -- Actually, 'message id X' often works globally or relative to default account. Let's try globally first.
-            -- If fails, we iterate folders.
 			try
 			    set targetMsg to message id targetID
 			on error
-			    -- Fallback: Search common folders
 			    set searchFolders to {"Inbox", "Sent Items", "Archive", "Deleted Items"}
 			    repeat with fName in searchFolders
 			        try
@@ -25,13 +21,11 @@ on run argv
 			            set targetMsg to (first message of f where id is targetID)
 			            exit repeat
 			        on error
-			            -- continue
 			        end try
 			    end repeat
 			end try
 			
 			if targetMsg is missing value then
-			    -- Last ditch: check ALL folders
 			    set allFolders to every mail folder
 			    repeat with f in allFolders
 			        try
@@ -46,13 +40,13 @@ on run argv
 				return "Error: Message not found with ID " & msgID
 			end if
 			
-			-- 2. Create Reply (This handles the 'From' account automatically)
+			-- 2. Create Reply
 			set newDraft to reply to targetMsg
 			
 			-- Wait for draft window to fully open
 			delay 2.0
 			
-			-- 2.1 Set Content - Using UI Automation (keystrokes) to bypass content property limitations
+			-- 2.1 Set Content - FIX ATTEMPT 4: UI Automation (keystrokes)
 			try
 			    if responseBody is not "" then
 			        -- Convert HTML <br> to newlines for typing
@@ -62,14 +56,15 @@ on run argv
 			        set plainTextBody to textItems as string
 			        set AppleScript's text item delimiters to ""
 			        
-			        -- Use System Events to type the text directly into the draft window
+			        -- Use System Events to type the text
 			        tell application "System Events"
 			            tell process "Microsoft Outlook"
 			                -- Activate the window
 			                set frontmost to true
 			                delay 0.5
 			                
-			                -- Find the message body field and type the text
+			                -- Find the message body field (usually the first text field in the window)
+			                -- Try to click in the body area and type
 			                try
 			                    -- Method 1: Try to find and click the body text field
 			                    set bodyField to first text area of window 1
@@ -98,7 +93,6 @@ on run argv
 			    set myAddress to address of draftSender
 			    set myName to name of draftSender
 			on error
-			    -- If direct access fails, try account
 			    try
 			        set draftAccount to account of newDraft
 			        set myAddress to email address of draftAccount
@@ -107,8 +101,7 @@ on run argv
 			    end try
 			end try
 			
-			-- 2.5 CLEANUP: Remove "Me" from the implicitly created recipients
-			-- (This happens if we reply to a message we sent ourselves)
+			-- 2.5 CLEANUP: Remove "Me" from recipients
 			try
 			    set existingTo to to recipients of newDraft
 			    repeat with r in existingTo
@@ -120,7 +113,6 @@ on run argv
 			        end try
 			    end repeat
 			    
-			    -- Same for CC? Usually 'reply' doesn't add CC, but good safety
 			    set existingCC to cc recipients of newDraft
 			    repeat with r in existingCC
 			         try
@@ -132,7 +124,6 @@ on run argv
 			    end repeat
 			on error
 			end try
-			
 			
 			-- 3. Simulate Reply All: Copy recipients from TARGET message
 			set origTo to to recipients of targetMsg
@@ -147,9 +138,6 @@ on run argv
 			        end try
 			        
 			        if rawAddr is not equal to myAddress and rawName is not equal to myName then
-			            -- Check if already exists in draft? (Avoid duplicates if Native Reply added them correctly)
-			            -- Simplest: Try adding. Outlook allows dups. 
-			            -- Let's check existence to be clean.
 			            set alreadyExists to false
 			            repeat with ex in (to recipients of newDraft)
 			                if (address of (get email address of ex) is equal to rawAddr) then
@@ -162,7 +150,6 @@ on run argv
 			            end if
 			        end if
 			    on error e
-			        -- log error?
 			    end try
 			end repeat
 			
@@ -193,12 +180,10 @@ on run argv
 			-- Wait before saving to ensure content is set
 			delay 1.0
 			
-			-- 5. Save and Close (window opens automatically on creation)
-			-- We must close 'window 1' assuming the new draft is focused.
+			-- 5. Save and Close
 			try
 			    close window 1 saving yes
 			on error
-			    -- Fallback: try closing the message itself if supported in future
 			    try 
 			        save newDraft
 			        close newDraft
@@ -213,3 +198,4 @@ on run argv
 		end try
 	end tell
 end run
+
