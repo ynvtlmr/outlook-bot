@@ -49,17 +49,114 @@ on run argv
 			-- 2. Create Reply (This handles the 'From' account automatically)
 			set newDraft to reply to targetMsg
 			
-			-- 2.1 Set Content (Prepend) - Done IMMEDIATELY to match successful experiment flow
+			-- Initial delay to allow draft window to start opening
+			delay 1.0
+			
+			-- 2.1 Set Content - Using UI Automation (keystrokes) to bypass content property limitations
 			try
 			    if responseBody is not "" then
-			        set oldContent to content of newDraft
-			        -- Convert newlines to BR?
-			        -- Simple replacement:
-			        set newContent to responseBody & "<br>" & oldContent
-			        set content of newDraft to newContent
+			        -- Convert HTML <br> to newlines for typing
+			        set AppleScript's text item delimiters to "<br>"
+			        set textItems to text items of responseBody
+			        set AppleScript's text item delimiters to return
+			        set plainTextBody to textItems as string
+			        set AppleScript's text item delimiters to ""
+			        
+			        -- Use System Events to type the text directly into the draft window
+			        tell application "System Events"
+			            tell process "Microsoft Outlook"
+			                -- CRITICAL: Activate Outlook first to ensure it's the front app
+			                set frontmost to true
+			                delay 0.5
+			                
+			                -- Wait for window to appear and be ready (with retries)
+			                set maxRetries to 10
+			                set retryCount to 0
+			                set windowReady to false
+			                
+			                repeat while not windowReady and retryCount < maxRetries
+			                    try
+			                        set winCount to count of windows
+			                        if winCount > 0 then
+			                            -- Window exists, try to access the text area
+			                            try
+			                                set bodyField to first text area of window 1
+			                                set windowReady to true
+			                            on error
+			                                -- Text area not ready yet
+			                                set retryCount to retryCount + 1
+			                                delay 0.5
+			                            end try
+			                        else
+			                            -- No windows yet
+			                            set retryCount to retryCount + 1
+			                            delay 0.5
+			                        end if
+			                    on error
+			                        -- Error checking, wait and retry
+			                        set retryCount to retryCount + 1
+			                        delay 0.5
+			                    end try
+			                end repeat
+			                
+			                -- Additional safety delay after window is ready
+			                delay 1.0
+			                
+			                -- Now focus and type the text with multiple attempts
+			                set typingSuccess to false
+			                set attemptCount to 0
+			                set maxAttempts to 3
+			                
+			                repeat while not typingSuccess and attemptCount < maxAttempts
+			                    try
+			                        set attemptCount to attemptCount + 1
+			                        
+			                        -- Method 1: Explicitly find, click, and focus the body field
+			                        set bodyField to first text area of window 1
+			                        
+			                        -- Click to focus
+			                        click bodyField
+			                        delay 0.3
+			                        
+			                        -- Click again to ensure focus (sometimes first click doesn't stick)
+			                        click bodyField
+			                        delay 0.3
+			                        
+			                        -- Move cursor to beginning (Command+A then delete to clear, or just start typing)
+			                        -- Actually, let's just type - it should append or replace
+			                        -- But first, ensure we're at the start by using Command+Up Arrow
+			                        key code 126 using command down -- Command+Up Arrow (move to top)
+			                        delay 0.2
+			                        
+			                        -- Now type the text
+			                        keystroke plainTextBody
+			                        delay 0.5
+			                        
+			                        -- Verify typing happened by checking if we can still interact
+			                        set typingSuccess to true
+			                        
+			                    on error e
+			                        -- If this attempt failed, wait and try again
+			                        delay 0.5
+			                        if attemptCount < maxAttempts then
+			                            -- Try alternative: just type without finding field
+			                            try
+			                                keystroke plainTextBody
+			                                set typingSuccess to true
+			                            on error
+			                                -- Continue to next attempt
+			                            end try
+			                        end if
+			                    end try
+			                end repeat
+				
+			                -- Final delay to ensure all keystrokes are processed
+			                delay 2.5
+			            end tell
+			        end tell
 			    end if
 			on error e
-			    return "Error setting content: " & e
+			    return "Error setting content via UI: " & e
 			end try
 			
 			-- Get my address/name to exclude from recipients
@@ -161,6 +258,9 @@ on run argv
 			     on error
 			     end try
 			end repeat
+			
+			-- Wait before saving to ensure content is set
+			delay 1.0
 			
 			-- 5. Save and Close (window opens automatically on creation)
 			-- We must close 'window 1' assuming the new draft is focused.

@@ -57,6 +57,7 @@ DEFAULT_REPLY = _config_data.get(
 # AI Models (Now dynamic, but we might keep this list for saving preferences if needed in the future)
 # For now, we remove the hardcoded defaults entirely as requested.
 AVAILABLE_MODELS = _config_data.get("available_models", [])
+PREFERRED_MODEL = _config_data.get("preferred_model", None)
 
 # Parsing Delimiters
 MSG_DELIMITER = "\n///END_OF_MESSAGE///\n"

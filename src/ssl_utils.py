@@ -32,26 +32,13 @@ def get_zscaler_cert_path() -> Optional[str]:
     return None
 
 
-def create_merged_cert_bundle(zscaler_cert_path: Optional[str] = None) -> str:
+def create_merged_cert_bundle() -> str:
     """
     Creates a merged certificate bundle by combining certifi's bundle with Zscaler certificate.
     Returns path to merged bundle, or certifi default if creation fails.
-    
-    Args:
-        zscaler_cert_path: Path to the custom certificate file. If None, attempts to auto-discover.
     """
-    if zscaler_cert_path is None:
-        zscaler_cert_path = get_zscaler_cert_path()
+    zscaler_cert_path = get_zscaler_cert_path()
     
-    # If explicitly provided path doesn't exist, we can't merge it.
-    if zscaler_cert_path and not os.path.exists(zscaler_cert_path):
-        # Fallback query if argument was invalid? 
-        # For now, let's treat argument as authority. 
-        # If user configures a path and it's missing, strictly speaking we should fail or warn.
-        # But for robustness, we fall back to auto-discovery or just certifi.
-        print(f"Warning: Configured CA bundle not found at {zscaler_cert_path}")
-        zscaler_cert_path = get_zscaler_cert_path()
-
     if not zscaler_cert_path:
         # No Zscaler cert found, just use certifi
         return certifi.where()
@@ -84,13 +71,12 @@ def create_merged_cert_bundle(zscaler_cert_path: Optional[str] = None) -> str:
         return certifi.where()
 
 
-def get_ssl_verify_option(disable_ssl: bool = False, config_bundle_path: Optional[str] = None) -> Union[ssl.SSLContext, str]:
+def get_ssl_verify_option(disable_ssl: bool = False) -> Union[ssl.SSLContext, str]:
     """
     Returns the SSL verify option to use for HTTP clients.
     
     Args:
         disable_ssl: If True, returns SSL context with CERT_NONE (disables verification)
-        config_bundle_path: Optional path to a custom CA bundle from config
         
     Returns:
         SSL context with CERT_NONE if SSL should be disabled
@@ -99,11 +85,12 @@ def get_ssl_verify_option(disable_ssl: bool = False, config_bundle_path: Optiona
     if disable_ssl:
         # Create SSL context that completely disables verification
         # This is necessary because httpx doesn't always respect verify=False boolean
+        # and Python's strict validation rejects Zscaler certificates even in bundles
         no_verify_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         no_verify_context.check_hostname = False
         no_verify_context.verify_mode = ssl.CERT_NONE
         return no_verify_context
     
-    # Try to create merged bundle using configured path (or auto-discovery if None)
-    merged_bundle = create_merged_cert_bundle(config_bundle_path)
+    # Try to create merged bundle using auto-discovery
+    merged_bundle = create_merged_cert_bundle()
     return merged_bundle

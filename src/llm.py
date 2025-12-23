@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import ssl
+import yaml
 from typing import Any, Dict, List, Optional
 
 import certifi
@@ -8,22 +10,20 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 
-
-import yaml
 from ssl_utils import get_ssl_verify_option
 
 
-def load_ssl_config_helper(key="disable_ssl_verify"):
-    """Loads a key from config.yaml, default None/False"""
-    try:
-        config_path = "config.yaml"
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                data = yaml.safe_load(f) or {}
-                return data.get(key)
-    except Exception:
-        pass
-    return None
+def load_ssl_config_helper():
+    """
+    Returns SSL verification status.
+    HARDCODED: Always returns True (SSL verification disabled) due to Zscaler corporate proxy issues.
+    This cannot be configured via config.yaml to prevent accidental removal.
+    """
+    # Hardcoded to True - SSL verification must be disabled for Zscaler compatibility
+    return True
+
+
+
 
 class LLMService:
     def __init__(self):
@@ -41,77 +41,61 @@ class LLMService:
         self._discover_models()
 
     def _init_clients(self):
-        disable_ssl = load_ssl_config_helper("disable_ssl_verify") or False
+        disable_ssl = load_ssl_config_helper()
         if disable_ssl:
             print("[Security Warning] SSL Verification is DISABLED via config.yaml")
-
+        
         # Gemini
         if self.gemini_key:
             try:
-                # If disable_ssl is True, we pass verify=False to httpx
-                # If False, we see if a custom bundle is provided, otherwise certifi or default
-                
-                # Check for custom bundle in config
-                custom_bundle_path = load_ssl_config_helper(key="ssl_ca_bundle")
-                
-                # Use ssl_utils to get the best verify option (Ctx or Path)
-                verify_option = get_ssl_verify_option(disable_ssl, custom_bundle_path)
+                # Use ssl_utils to get the best verify option (Path or SSL Context)
+                verify_option = get_ssl_verify_option(disable_ssl)
                 
                 # Global ENV Configuration for robustness (Fixes OpenAI and others)
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
+                    print(f"[Info] Using merged certificate bundle: {verify_option}")
                     print(f"Global SSL Configuration: Setting SSL_CERT_FILE to {verify_option}")
                     os.environ["SSL_CERT_FILE"] = verify_option
                     os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                 elif isinstance(verify_option, ssl.SSLContext):
-                    print("Global SSL Configuration: verify_option is a Context (likely disabled), cannot set ENV path.")
-                    # If strictly disabled, we can't easily force OpenAI via ENV to be disabled without code.
-                    # But if the user selected 'disable', we pass context to Gemini below.
+                    print("[Info] SSL verification disabled (using CERT_NONE context)")
+                    # Clear env vars that might point to failing bundles when SSL is disabled
+                    # This ensures the SSL context is used instead of env vars
+                    if "SSL_CERT_FILE" in os.environ:
+                        del os.environ["SSL_CERT_FILE"]
+                    if "REQUESTS_CA_BUNDLE" in os.environ:
+                        del os.environ["REQUESTS_CA_BUNDLE"]
                 
                 self.gemini_client = genai.Client(
                     api_key=self.gemini_key, 
                     http_options=types.HttpOptions(client_args={"verify": verify_option})
                 )
                 
-                self.gemini_client = genai.Client(
-                    api_key=self.gemini_key, 
-                    http_options=types.HttpOptions(client_args={"verify": verify_option})
-                )
+
             except Exception as e:
                 print(f"Warning: Failed to initialize Gemini client: {e}")
 
         # OpenAI
         if self.openai_key:
             try:
-                # OpenAI client handles disable_ssl via http_client arg usually, 
-                # but standard init doesn't easily expose it without custom transport.
-                # However, for now we focus on Gemini which is the primary issue.
-                self.openai_client = OpenAI(api_key=self.openai_key)
+                # Use the same SSL configuration approach as test_openai_connection
+                verify_option = get_ssl_verify_option(disable_ssl)
+                
+                if isinstance(verify_option, str) and os.path.exists(verify_option):
+                    # Use certificate bundle via environment variables
+                    os.environ["SSL_CERT_FILE"] = verify_option
+                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                    self.openai_client = OpenAI(api_key=self.openai_key)
+                elif isinstance(verify_option, ssl.SSLContext):
+                    # For CERT_NONE, use custom httpx client
+                    import httpx
+                    httpx_client = httpx.Client(verify=verify_option)
+                    self.openai_client = OpenAI(api_key=self.openai_key, http_client=httpx_client)
+                else:
+                    # Default initialization
+                    self.openai_client = OpenAI(api_key=self.openai_key)
             except Exception as e:
                 print(f"Warning: Failed to initialize OpenAI client: {e}")
-
-    # ... (rest of class)
-
-    @staticmethod
-    def test_gemini_connection(api_key):
-        """
-        Tests connectivity to Gemini API with the provided key.
-        Returns (success: bool, message: str)
-        """
-        if not api_key:
-            return False, "API Key is empty."
-
-        try:
-            disable_ssl = load_ssl_config_helper()
-            verify_option = False if disable_ssl else certifi.where()
-
-            client = genai.Client(
-                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
-            )
-            # Lightweight call to list models
-            list(client.models.list())
-            return True, "Connection Successful!"
-        except Exception as e:
-            return False, f"Connection Failed: {str(e)}"
 
     def _discover_models(self):
         """
@@ -198,7 +182,9 @@ class LLMService:
         # 2. OpenAI Discovery
         if self.openai_client:
             try:
+                print("  -> Querying OpenAI for available models...")
                 models_page = self.openai_client.models.list()
+                print(f"  -> Received {len(models_page.data)} models from OpenAI")
                 for m in models_page.data:
                     mid = m.id
                     lower_id = mid.lower()
@@ -233,9 +219,15 @@ class LLMService:
                         continue
 
                     self.available_models.append({"id": mid, "provider": "openai"})
+                
+                if len(self.available_models) == 0:
+                    print(f"  -> Warning: No OpenAI models passed filtering criteria")
+                    print(f"  -> Consider checking filter rules if models are expected")
 
             except Exception as e:
                 print(f"  -> OpenAI model discovery failed: {e}")
+                import traceback
+                print(f"  -> Traceback: {traceback.format_exc()}")
 
         # Sort models by estimated cost/efficiency
         self._sort_models_by_cost()
@@ -250,30 +242,30 @@ class LLMService:
 
     def _sort_models_by_cost(self):
         """
-        Sorts self.available_models based on a heuristic of cost/speed + version freshness.
+        Sorts self.available_models based on capability (most capable first).
 
-        Sort Keys:
-        1. Priority (Ascending): 0 (Cheapest) -> 1 (Very Cheap) -> ...
-        2. Version (Ascending): Older versions (2.5, 4.1, 5) preferred within same priority.
+        Sort Keys (reversed for most capable first):
+        1. Priority (Descending): 3 (Most Capable) -> 2 -> 1 -> 0 (Least Capable)
+        2. Version (Descending): Newer/higher versions preferred within same priority.
         3. Name (Ascending): Alphabetical tie-break.
 
-        Priority 0 (Cheapest): Gemini Lite, GPT-4o-mini, GPT-5-mini
-        Priority 1 (Very Cheap): Gemini Flash
-        Priority 2 (Cheap): GPT-3.5-Turbo
-        Priority 3: Others
+        Priority 0 (Least Capable): Gemini Lite, GPT-4o-mini, GPT-5-mini
+        Priority 1 (Very Capable): Gemini Flash
+        Priority 2 (Capable): GPT-3.5-Turbo
+        Priority 3 (Most Capable): Others
         """
 
         def get_sort_key(model_entry):
             mid = model_entry["id"].lower()
 
             # --- 1. Priority Score ---
-            priority = 3  # Default
+            priority = 3  # Default (most capable)
 
             if "lite" in mid:
-                priority = 0
+                priority = 0  # Least capable
             # Avoid matching 'mini' inside 'gemini'
             elif "mini" in mid and "gemini" not in mid:
-                priority = 0
+                priority = 0  # Least capable
 
             elif "flash" in mid:
                 priority = 1
@@ -298,11 +290,11 @@ class LLMService:
             if "gpt-4o" in mid and version == 4.0:
                 version = 4.5  # Arbitrary bump to rank above standard 4.0 if needed
 
-            # We want ASCENDING version (Older first, as requested).
-            # Python sorts tuples element-wise.
-            # So we return +version.
+            # We want DESCENDING priority and version (most capable first).
+            # Python sorts tuples element-wise, so we negate to reverse order.
+            # Higher priority and version should come first, so we use negative values.
 
-            return (priority, version, mid)
+            return (-priority, -version, mid)
 
         # Debug sort keys
         # print("DEBUG SORT KEYS:")
@@ -324,9 +316,10 @@ class LLMService:
         self._discover_models()
         return self.get_models_list()
 
-    def generate_reply(self, email_body, system_prompt):
+    def generate_reply(self, email_body, system_prompt, preferred_model=None):
         """
         Tries to generate a reply using available models in order.
+        If preferred_model is specified, tries that model first.
         """
         if not self.available_models:
             print("Error: No available models to generate reply.")
@@ -334,7 +327,23 @@ class LLMService:
 
         prompt = f"{system_prompt}\n\nEmail Thread:\n{email_body}\n\nResponse:"
 
-        for model_entry in self.available_models:
+        # Reorder models to try preferred_model first if specified
+        models_to_try = self.available_models.copy()
+        if preferred_model:
+            # Find the preferred model and move it to the front
+            preferred_entry = None
+            for i, model_entry in enumerate(models_to_try):
+                if model_entry["id"] == preferred_model:
+                    preferred_entry = models_to_try.pop(i)
+                    break
+            
+            if preferred_entry:
+                models_to_try.insert(0, preferred_entry)
+                print(f"[Info] Using preferred model: {preferred_model}")
+            else:
+                print(f"[Warning] Preferred model '{preferred_model}' not found. Using default order.")
+
+        for model_entry in models_to_try:
             model_id = model_entry["id"]
             provider = model_entry["provider"]
 
@@ -349,6 +358,7 @@ class LLMService:
                     continue
 
                 if result:
+                    print(f"✓ Selected model: {provider}:{model_id}")
                     return result
             except Exception as e:
                 print(f"  -> Failed with {model_id}: {e}")
@@ -384,12 +394,29 @@ class LLMService:
         )
         return completion.choices[0].message.content.strip() if completion.choices[0].message.content else ""
 
-    def generate_batch_replies(self, email_batch, system_prompt):
+    def generate_batch_replies(self, email_batch, system_prompt, preferred_model=None):
         """
         Generates batch replies. Tries to use the JSON-list prompting strategy.
+        If preferred_model is specified, tries that model first.
         """
         if not self.available_models:
             return {}
+        
+        # Reorder models to try preferred_model first if specified
+        models_to_try = self.available_models.copy()
+        if preferred_model:
+            # Find the preferred model and move it to the front
+            preferred_entry = None
+            for i, model_entry in enumerate(models_to_try):
+                if model_entry["id"] == preferred_model:
+                    preferred_entry = models_to_try.pop(i)
+                    break
+            
+            if preferred_entry:
+                models_to_try.insert(0, preferred_entry)
+                print(f"[Info] Using preferred model for batch: {preferred_model}")
+            else:
+                print(f"[Warning] Preferred model '{preferred_model}' not found. Using default order.")
 
         # Prepare the centralized prompt (same as in genai.py)
         prompt_intro = (
@@ -411,7 +438,7 @@ class LLMService:
         full_json_input = json.dumps(prompt_batch, indent=2)
         full_prompt = prompt_intro + full_json_input
 
-        for model_entry in self.available_models:
+        for model_entry in models_to_try:
             model_id = model_entry["id"]
             provider = model_entry["provider"]
 
@@ -492,6 +519,7 @@ class LLMService:
                         results[item["id"]] = item["reply_text"]
 
                 if results:
+                    print(f"✓ Selected model for batch: {provider}:{model_id}")
                     return results
 
             except Exception as e:
@@ -510,19 +538,23 @@ class LLMService:
             return False, "API Key is empty."
 
         try:
-            disable_ssl = load_ssl_config_helper("disable_ssl_verify") or False
-            custom_bundle = load_ssl_config_helper("ssl_ca_bundle")
-
-            verify_option = get_ssl_verify_option(disable_ssl, custom_bundle)
+            # Load SSL config and use it
+            disable_ssl = load_ssl_config_helper()
+            verify_option = get_ssl_verify_option(disable_ssl)
             
-            # Note: We aren't setting global ENVs here to avoid side effects during a simple "Test Connection" button press?
-            # Actually, we SHOULD, because if test succeeds, we want subsequent calls (if any) to likely work. 
-            # But usually test is isolated.
+            # Set global ENVs for consistency (only if using certificate bundle)
+            # If using SSL context (CERT_NONE), don't set env vars as they might interfere
+            if isinstance(verify_option, str) and os.path.exists(verify_option):
+                os.environ["SSL_CERT_FILE"] = verify_option
+                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+            elif isinstance(verify_option, ssl.SSLContext):
+                # When SSL is disabled, clear env vars that might point to failing bundles
+                # This ensures the SSL context is used instead of env vars
+                if "SSL_CERT_FILE" in os.environ:
+                    del os.environ["SSL_CERT_FILE"]
+                if "REQUESTS_CA_BUNDLE" in os.environ:
+                    del os.environ["REQUESTS_CA_BUNDLE"]
             
-            client = genai.Client(
-                api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
-            )
-
             client = genai.Client(
                 api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
             )
@@ -542,7 +574,25 @@ class LLMService:
             return False, "API Key is empty."
 
         try:
-            client = OpenAI(api_key=api_key)
+            # OpenAI respects SSL_CERT_FILE and REQUESTS_CA_BUNDLE env vars
+            # These are set in _init_clients when SSL is configured
+            # For CERT_NONE, we need to use custom httpx client
+            disable_ssl = load_ssl_config_helper()
+            verify_option = get_ssl_verify_option(disable_ssl)
+            
+            # Set env vars if using certificate bundle
+            if isinstance(verify_option, str) and os.path.exists(verify_option):
+                os.environ["SSL_CERT_FILE"] = verify_option
+                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                client = OpenAI(api_key=api_key)
+            elif isinstance(verify_option, ssl.SSLContext):
+                # For CERT_NONE, we need custom httpx client
+                import httpx
+                httpx_client = httpx.Client(verify=verify_option)
+                client = OpenAI(api_key=api_key, http_client=httpx_client)
+            else:
+                client = OpenAI(api_key=api_key)
+            
             # Lightweight call to list models
             client.models.list()
             return True, "Connection Successful!"

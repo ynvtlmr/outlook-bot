@@ -3,7 +3,7 @@ import traceback
 from datetime import datetime
 
 import llm
-from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, SYSTEM_PROMPT_PATH
+from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, SYSTEM_PROMPT_PATH, PREFERRED_MODEL
 from date_utils import get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
@@ -112,9 +112,9 @@ def process_replies(candidates, client, system_prompt, llm_service):
         return
 
     print(f"\nProcessing batch of {len(batch_jobs)} emails with LLM Service...")
-    batch_replies = llm_service.generate_batch_replies(batch_jobs, system_prompt)
+    batch_replies = llm_service.generate_batch_replies(batch_jobs, system_prompt, preferred_model=PREFERRED_MODEL)
 
-    print(f"Received {len(batch_replies)} replies from Gemini.")
+    print(f"Received {len(batch_replies)} replies from LLM Service.")
 
     for job in batch_jobs:
         msg_id = job["id"]

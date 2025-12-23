@@ -6,8 +6,7 @@ venv/
 .env
 dist/
 build/
-
-# New Tools
 .venv/
 .ruff_cache/
 zscaler_cert_bundle.pem
+.coverage
