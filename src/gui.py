@@ -426,16 +426,16 @@ class OutlookBotGUI(ctk.CTk):
                 pref = self._initial_preferred_model
             
             # Determine which provider contains this preferred model to set correct filter
-            if pref:
-                 # Find provider for this model
-                 found_prov = next((m["provider"] for m in models_data if m["id"] == pref), None)
-                 if found_prov:
-                     # Map 'gemini' -> 'Gemini', 'openai' -> 'OpenAI'
-                     display_prov = "Gemini" if found_prov == "gemini" else ("OpenAI" if found_prov == "openai" else "All")
-                     self.combo_provider.set(display_prov)
-                 else:
-                     # Model not found in list? Maybe switched to 'All'
-                     pass
+            # Logic removed: User prefers "All" to be default always.
+            # if pref:
+            #      # Find provider for this model
+            #      found_prov = next((m["provider"] for m in models_data if m["id"] == pref), None)
+            #      if found_prov:
+            #          # Map 'gemini' -> 'Gemini', 'openai' -> 'OpenAI'
+            #          display_prov = "Gemini" if found_prov == "gemini" else ("OpenAI" if found_prov == "openai" else "All")
+            #          self.combo_provider.set(display_prov)
+            #      else:
+            #          pass
 
             # Update dropdown based on current provider/preferred selection
             self.update_model_dropdown(preferred_model=pref)
