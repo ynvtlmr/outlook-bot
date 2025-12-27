@@ -85,3 +85,28 @@ class TestMainLogic(unittest.TestCase):
 
         main.process_replies([], mock_client, "sys", mock_service)
         mock_service.generate_batch_replies.assert_not_called()
+
+    def test_wait_for_outlook_ready_success(self):
+        """Test wait loop success."""
+        with patch("main.get_outlook_version", return_value="16.0"):
+            assert main.wait_for_outlook_ready(timeout=1) is True
+
+    @patch("main.time.sleep", return_value=None) # Speed up test
+    def test_wait_for_outlook_ready_timeout(self, mock_sleep):
+        """Test wait loop timeout."""
+        with patch("main.get_outlook_version", return_value=None):
+            assert main.wait_for_outlook_ready(timeout=1) is False
+
+    @patch("main.wait_for_outlook_ready", return_value=True)
+    @patch("main.run_scraper")
+    @patch("main.OutlookClient")
+    @patch("main.llm.LLMService")
+    def test_main_execution_flow(self, mock_llm, mock_client_cls, mock_scraper, mock_wait):
+        """Test proper main flow: Activate -> Wait -> Scrape."""
+        mock_scraper.return_value = []
+        
+        main.main()
+        
+        mock_client_instance = mock_client_cls.return_value
+        mock_client_instance.activate_outlook.assert_called_once()
+        mock_wait.assert_called_once()

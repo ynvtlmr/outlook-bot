@@ -1,4 +1,6 @@
+
 import html
+import time
 import traceback
 from datetime import datetime
 from typing import Any
@@ -23,6 +25,26 @@ def check_outlook_status() -> bool:
     else:
         print("Warning: Could not detect Outlook version. Please ensure Microsoft Outlook is running.")
         return False
+
+
+def wait_for_outlook_ready(timeout: int = 60) -> bool:
+    """
+    Waits for Outlook to become responsive by polling its version.
+    Returns True if ready, False if timeout reached.
+    """
+    print(f"Waiting for Outlook to be ready (timeout: {timeout}s)...")
+    start_time = time.time()
+
+    while (time.time() - start_time) < timeout:
+        version = get_outlook_version()
+        if version:
+            print(f"  -> Outlook ({version}) is ready.")
+            return True
+        print("  -> Waiting for Outlook...")
+        time.sleep(2)
+
+    print("  -> Error: Timeout waiting for Outlook to start.")
+    return False
 
 
 def load_system_prompt() -> str:
@@ -154,13 +176,16 @@ def create_draft_reply(client: OutlookClient, msg_id: str, subject: str, reply_t
 def main() -> None:
     print("--- Outlook Bot Generic Scraper ---")
 
-    if not check_outlook_status():
-        print_separator()
-        # We continue anyway as some scripts might work or failure is soft
-    else:
-        print_separator()
-
     try:
+        # 0. Initialize Client and Focus Outlook
+        client = OutlookClient(APPLESCRIPTS_DIR)
+        print("Launching/Focusing Outlook...")
+        client.activate_outlook()
+        
+        # 0.5 Wait for Outlook to load
+        if not wait_for_outlook_ready():
+            return
+
         # 1. Scrape Flagged
         print("\n" + "=" * 30 + "\n")
         flagged_threads = run_scraper(mode="flagged")
@@ -171,7 +196,8 @@ def main() -> None:
 
         # 2. Process Active Flags
         print("\n--- Processing Active Flags ---")
-        client = OutlookClient(APPLESCRIPTS_DIR)
+        # client already initialized
+        
         # Load System Prompt and Date Context
         base_system_prompt = load_system_prompt()
         date_context = get_current_date_context()

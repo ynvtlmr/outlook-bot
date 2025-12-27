@@ -22,6 +22,12 @@ class OutlookClient:
             print(f"Error running AppleScript {script_name}: {e.stderr}")
             return None
 
+    def activate_outlook(self) -> None:
+        """
+        Activates the Microsoft Outlook application, bringing it to the foreground.
+        """
+        self._run_script("activate_outlook.scpt")
+
     def get_emails(self, email_address: str) -> Optional[str]:
         """
         Retrieves emails for a specific address.
