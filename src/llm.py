@@ -8,7 +8,8 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 
-from ssl_utils import get_ssl_verify_option
+from config import CredentialManager
+from ssl_utils import get_ssl_verify_option, setup_ssl_environment
 
 # Model exclusion keywords for filtering out non-text/specialized models
 EXCLUDED_MODEL_KEYWORDS = [
@@ -46,10 +47,23 @@ def load_ssl_config_helper():
     return True
 
 
+def _extract_json(text: str) -> Any:
+    """Helper to extract and parse JSON from LLM response text."""
+    clean_text = text.strip()
+    if clean_text.startswith("```json"):
+        clean_text = clean_text[7:]
+    if clean_text.startswith("```"):
+        clean_text = clean_text[3:]
+    if clean_text.endswith("```"):
+        clean_text = clean_text[:-3]
+    return json.loads(clean_text)
+
+
 class LLMService:
     def __init__(self):
-        self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.openai_key = os.getenv("OPENAI_API_KEY")
+        self.gemini_key = CredentialManager.get_gemini_key()
+        self.openai_key = CredentialManager.get_openai_key()
+        self.openrouter_key = CredentialManager.get_openrouter_key()
 
         self.gemini_client: Optional[genai.Client] = None
         self.openai_client: Optional[OpenAI] = None
@@ -71,21 +85,7 @@ class LLMService:
             try:
                 # Use ssl_utils to get the best verify option (Path or SSL Context)
                 verify_option = get_ssl_verify_option(disable_ssl)
-
-                # Global ENV Configuration for robustness (Fixes OpenAI and others)
-                if isinstance(verify_option, str) and os.path.exists(verify_option):
-                    print(f"[Info] Using merged certificate bundle: {verify_option}")
-                    print(f"Global SSL Configuration: Setting SSL_CERT_FILE to {verify_option}")
-                    os.environ["SSL_CERT_FILE"] = verify_option
-                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
-                elif isinstance(verify_option, ssl.SSLContext):
-                    print("[Info] SSL verification disabled (using CERT_NONE context)")
-                    # Clear env vars that might point to failing bundles when SSL is disabled
-                    # This ensures the SSL context is used instead of env vars
-                    if "SSL_CERT_FILE" in os.environ:
-                        del os.environ["SSL_CERT_FILE"]
-                    if "REQUESTS_CA_BUNDLE" in os.environ:
-                        del os.environ["REQUESTS_CA_BUNDLE"]
+                setup_ssl_environment(verify_option)
 
                 self.gemini_client = genai.Client(
                     api_key=self.gemini_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
@@ -98,11 +98,12 @@ class LLMService:
             try:
                 # Use the same SSL configuration approach as test_openai_connection
                 verify_option = get_ssl_verify_option(disable_ssl)
+                # Environment setup already handled above if gemini key existed, but duplicate call is safe/idempotent
+                if not self.gemini_key:
+                    setup_ssl_environment(verify_option)
 
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
                     # Use certificate bundle via environment variables
-                    os.environ["SSL_CERT_FILE"] = verify_option
-                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                     self.openai_client = OpenAI(api_key=self.openai_key)
                 elif isinstance(verify_option, ssl.SSLContext):
                     # For CERT_NONE, use custom httpx client
@@ -117,17 +118,18 @@ class LLMService:
                 print(f"Warning: Failed to initialize OpenAI client: {e}")
 
         # OpenRouter
-        self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        self.openrouter_key = CredentialManager.get_openrouter_key()
         if self.openrouter_key:
             try:
                 verify_option = get_ssl_verify_option(disable_ssl)
+                if not self.gemini_key and not self.openai_key:
+                    setup_ssl_environment(verify_option)
+
                 OR_BASE_URL = "https://openrouter.ai/api/v1"
 
                 # Similar SSL handling for OpenRouter (via OpenAI SDK)
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
-                    # Globals likely already set if OpenAI init ran, but safe to set again or rely on them
-                    os.environ["SSL_CERT_FILE"] = verify_option
-                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                    # Globals likely already set if OpenAI/Gemini init ran
                     self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
                 elif isinstance(verify_option, ssl.SSLContext):
                     import httpx
@@ -259,8 +261,9 @@ class LLMService:
     def refresh_models(self):
         """Re-initializes clients and rediscovers models (useful for GUI)."""
         # Reload env vars in case they changed in memory
-        self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.openai_key = os.getenv("OPENAI_API_KEY")
+        self.gemini_key = CredentialManager.get_gemini_key()
+        self.openai_key = CredentialManager.get_openai_key()
+        self.openrouter_key = CredentialManager.get_openrouter_key()
         self._init_clients()
         self._discover_models()
         return self.get_models_list()
@@ -443,16 +446,11 @@ class LLMService:
                     raw_text = content if content else ""
 
                 # Parse JSON
-                # Clean up markdown if present
-                clean_text = raw_text.strip()
-                if clean_text.startswith("```json"):
-                    clean_text = clean_text[7:]
-                if clean_text.startswith("```"):
-                    clean_text = clean_text[3:]
-                if clean_text.endswith("```"):
-                    clean_text = clean_text[:-3]
-
-                parsed_data = json.loads(clean_text)
+                try:
+                    parsed_data = _extract_json(raw_text)
+                except json.JSONDecodeError:
+                    print(f"  -> JSON parse failed for {model_id} output.")
+                    continue
 
                 # OpenAI json_object mode might wrap it?
                 # If prompt asked for list, valid JSON is [].
@@ -505,19 +503,7 @@ class LLMService:
             # Load SSL config and use it
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
-
-            # Set global ENVs for consistency (only if using certificate bundle)
-            # If using SSL context (CERT_NONE), don't set env vars as they might interfere
-            if isinstance(verify_option, str) and os.path.exists(verify_option):
-                os.environ["SSL_CERT_FILE"] = verify_option
-                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
-            elif isinstance(verify_option, ssl.SSLContext):
-                # When SSL is disabled, clear env vars that might point to failing bundles
-                # This ensures the SSL context is used instead of env vars
-                if "SSL_CERT_FILE" in os.environ:
-                    del os.environ["SSL_CERT_FILE"]
-                if "REQUESTS_CA_BUNDLE" in os.environ:
-                    del os.environ["REQUESTS_CA_BUNDLE"]
+            setup_ssl_environment(verify_option)
 
             client = genai.Client(
                 api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
@@ -549,11 +535,11 @@ class LLMService:
         try:
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
+            setup_ssl_environment(verify_option)
+
             OR_BASE_URL = "https://openrouter.ai/api/v1"
 
             if isinstance(verify_option, str) and os.path.exists(verify_option):
-                os.environ["SSL_CERT_FILE"] = verify_option
-                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
             elif isinstance(verify_option, ssl.SSLContext):
                 import httpx
@@ -584,11 +570,10 @@ class LLMService:
             # For CERT_NONE, we need to use custom httpx client
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
+            setup_ssl_environment(verify_option)
 
             # Set env vars if using certificate bundle
             if isinstance(verify_option, str) and os.path.exists(verify_option):
-                os.environ["SSL_CERT_FILE"] = verify_option
-                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                 client = OpenAI(api_key=api_key)
             elif isinstance(verify_option, ssl.SSLContext):
                 # For CERT_NONE, we need custom httpx client

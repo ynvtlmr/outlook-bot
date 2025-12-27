@@ -26,6 +26,7 @@ else:
 # Adjust path to import src modules
 sys.path.append(os.path.join(project_root, "src"))
 
+from config import ENV_GEMINI_API_KEY
 from llm import LLMService  # noqa: E402
 
 
@@ -70,7 +71,7 @@ def test_scenario_2_api_call():
         if not service.gemini_client:
             print("\n[FAIL] Gemini client is not initialized!")
             print("[Diagnosis] This will cause the batch generation to skip Gemini")
-            gemini_key = os.getenv("GEMINI_API_KEY")
+            gemini_key = os.getenv(ENV_GEMINI_API_KEY)
             if not gemini_key:
                 print("[Root Cause] GEMINI_API_KEY not found in environment")
             else:

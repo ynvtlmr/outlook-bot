@@ -11,7 +11,17 @@ import llm
 
 # Import main script logic
 import main
-from config import CONFIG_PATH, DAYS_THRESHOLD, DEFAULT_REPLY, ENV_PATH, SYSTEM_PROMPT_PATH
+from config import (
+    CONFIG_PATH,
+    DAYS_THRESHOLD,
+    DEFAULT_REPLY,
+    ENV_GEMINI_API_KEY,
+    ENV_OPENAI_API_KEY,
+    ENV_OPENROUTER_API_KEY,
+    ENV_PATH,
+    SYSTEM_PROMPT_PATH,
+    CredentialManager,
+)
 from date_utils import get_current_date_context
 
 # --- Configuration & Constants ---
@@ -252,15 +262,15 @@ class OutlookBotGUI(ctk.CTk):
         try:
             if os.path.exists(ENV_PATH):
                 dotenv.load_dotenv(ENV_PATH, override=True)
-                api_key = os.getenv("GEMINI_API_KEY", "")
+                api_key = CredentialManager.get_gemini_key() or ""
                 self.entry_api_key.delete(0, "end")
                 self.entry_api_key.insert(0, api_key)
 
-                openai_key = os.getenv("OPENAI_API_KEY", "")
+                openai_key = CredentialManager.get_openai_key() or ""
                 self.entry_openai_key.delete(0, "end")
                 self.entry_openai_key.insert(0, openai_key)
 
-                or_key = os.getenv("OPENROUTER_API_KEY", "")
+                or_key = CredentialManager.get_openrouter_key() or ""
                 self.entry_or_key.delete(0, "end")
                 self.entry_or_key.insert(0, or_key)
         except OSError as e:
@@ -330,16 +340,16 @@ class OutlookBotGUI(ctk.CTk):
             new_key = self.entry_api_key.get().strip()
 
             # Use dotenv.set_key to preserve other vars if any
-            dotenv.set_key(ENV_PATH, "GEMINI_API_KEY", new_key)
-            os.environ["GEMINI_API_KEY"] = new_key
+            dotenv.set_key(ENV_PATH, ENV_GEMINI_API_KEY, new_key)
+            os.environ[ENV_GEMINI_API_KEY] = new_key
 
             new_openai_key = self.entry_openai_key.get().strip()
-            dotenv.set_key(ENV_PATH, "OPENAI_API_KEY", new_openai_key)
-            os.environ["OPENAI_API_KEY"] = new_openai_key
+            dotenv.set_key(ENV_PATH, ENV_OPENAI_API_KEY, new_openai_key)
+            os.environ[ENV_OPENAI_API_KEY] = new_openai_key
 
             new_or_key = self.entry_or_key.get().strip()
-            dotenv.set_key(ENV_PATH, "OPENROUTER_API_KEY", new_or_key)
-            os.environ["OPENROUTER_API_KEY"] = new_or_key
+            dotenv.set_key(ENV_PATH, ENV_OPENROUTER_API_KEY, new_or_key)
+            os.environ[ENV_OPENROUTER_API_KEY] = new_or_key
         except OSError as e:
             self.log(f"[Error] Failed to save .env: {e}\n")
             success = False
@@ -421,9 +431,9 @@ class OutlookBotGUI(ctk.CTk):
         self.log("[Info] Detecting available models...\n")
         try:
             # Explicitly set ENV from UI before detecting.
-            os.environ["GEMINI_API_KEY"] = self.entry_api_key.get().strip()
-            os.environ["OPENAI_API_KEY"] = self.entry_openai_key.get().strip()
-            os.environ["OPENROUTER_API_KEY"] = self.entry_or_key.get().strip()
+            os.environ[ENV_GEMINI_API_KEY] = self.entry_api_key.get().strip()
+            os.environ[ENV_OPENAI_API_KEY] = self.entry_openai_key.get().strip()
+            os.environ[ENV_OPENROUTER_API_KEY] = self.entry_or_key.get().strip()
 
             service = llm.LLMService()
             # ACCESS RAW DATA instead of list strings, so we know provider

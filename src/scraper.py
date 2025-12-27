@@ -24,48 +24,50 @@ def parse_raw_data(raw_data: str) -> list[Message]:
             continue
 
         msg: Message = {}
-        # Simple parsing logic
+        try:
+            lines = raw_msg.splitlines()
+            content_lines: list[str] = []
+            in_body = False
 
-        lines = raw_msg.splitlines()
-        content_lines: list[str] = []
-        in_body = False
+            for line in lines:
+                if line.strip() == BODY_START:
+                    in_body = True
+                    continue
+                if line.strip() == BODY_END:
+                    in_body = False
+                    continue
 
-        for line in lines:
-            if line.strip() == BODY_START:
-                in_body = True
-                continue
-            if line.strip() == BODY_END:
-                in_body = False
-                continue
+                if in_body:
+                    content_lines.append(line)
+                else:
+                    if line.startswith("ID: "):
+                        msg["id"] = line[4:].strip()
+                    elif line.startswith("From: "):
+                        msg["from"] = line[6:].strip()
+                    elif line.startswith("Date: "):
+                        date_str = line[6:].strip()
+                        msg["date"] = date_str
+                        msg["timestamp"] = parse_date_string(date_str)
+                    elif line.startswith("Subject: "):
+                        msg["subject"] = line[9:].strip()
+                    elif line.startswith("FlagStatus: "):
+                        msg["flag_status"] = line[12:].strip()
+                    elif line.startswith("MessageID: "):
+                        msg["message_id"] = line[11:].strip()
 
-            if in_body:
-                content_lines.append(line)
-            else:
-                if line.startswith("ID: "):
-                    msg["id"] = line[4:].strip()
-                elif line.startswith("From: "):
-                    msg["from"] = line[6:].strip()
-                elif line.startswith("Date: "):
-                    date_str = line[6:].strip()
-                    msg["date"] = date_str
-                    msg["timestamp"] = parse_date_string(date_str)
-                elif line.startswith("Subject: "):
-                    msg["subject"] = line[9:].strip()
-                elif line.startswith("FlagStatus: "):
-                    msg["flag_status"] = line[12:].strip()
-                elif line.startswith("MessageID: "):
-                    msg["message_id"] = line[11:].strip()
+            msg["content"] = "\n".join(content_lines)
 
-        msg["content"] = "\n".join(content_lines)
+            # Fallback for subject grouping if ID is missing or generic
+            if not msg.get("id") or msg.get("id") == "NO_ID":
+                # Normalize subject (remove Re:, Fwd:)
+                subj = msg.get("subject", "No Subject")
+                norm_subj = re.sub(r"^(Re|Fwd|FW|RE):\s*", "", subj, flags=re.IGNORECASE).strip()
+                msg["id"] = norm_subj
 
-        # Fallback for subject grouping if ID is missing or generic
-        if not msg.get("id") or msg.get("id") == "NO_ID":
-            # Normalize subject (remove Re:, Fwd:)
-            subj = msg.get("subject", "No Subject")
-            norm_subj = re.sub(r"^(Re|Fwd|FW|RE):\s*", "", subj, flags=re.IGNORECASE).strip()
-            msg["id"] = norm_subj
-
-        messages.append(msg)
+            messages.append(msg)
+        except Exception as e:
+            print(f"Warning: Failed to parse message block. Error: {e}")
+            continue
     return messages
 
 

@@ -96,3 +96,20 @@ def get_ssl_verify_option(disable_ssl: bool = False) -> Union[ssl.SSLContext, st
     # Try to create merged bundle using auto-discovery
     merged_bundle = create_merged_cert_bundle()
     return merged_bundle
+
+
+def setup_ssl_environment(verify_option: Union[ssl.SSLContext, str]) -> None:
+    """
+    Configures environment variables based on the SSL verify option.
+    """
+    if isinstance(verify_option, str) and os.path.exists(verify_option):
+        # Global ENV Configuration for robustness
+        print(f"[Info] Using merged certificate bundle: {verify_option}")
+        os.environ["SSL_CERT_FILE"] = verify_option
+        os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+    elif isinstance(verify_option, ssl.SSLContext):
+        # Clear env vars that might point to failing bundles when SSL is disabled
+        if "SSL_CERT_FILE" in os.environ:
+            del os.environ["SSL_CERT_FILE"]
+        if "REQUESTS_CA_BUNDLE" in os.environ:
+            del os.environ["REQUESTS_CA_BUNDLE"]

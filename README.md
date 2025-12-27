@@ -34,6 +34,7 @@ A macOS automation tool that bridges Microsoft Outlook with LLM providers (Gemin
 - **Customizable Persona**: Define your writing style via `system_prompt.txt`
 - **Smart Filtering**: Only processes stale threads, ignoring recent conversations
 - **Corporate SSL Support**: Handles Zscaler and other corporate proxy certificates
+- **Resilient Parsing**: Robustly handles email format variations
 
 ---
 

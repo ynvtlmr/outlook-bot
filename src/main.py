@@ -21,7 +21,7 @@ def check_outlook_status() -> bool:
         print(f"Target Client: Microsoft Outlook {version}")
         return True
     else:
-        print("Warning: Could not detect Outlook version. Is it running?")
+        print("Warning: Could not detect Outlook version. Please ensure Microsoft Outlook is running.")
         return False
 
 
