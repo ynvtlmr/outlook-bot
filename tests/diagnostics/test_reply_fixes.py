@@ -46,7 +46,7 @@ def get_latest_draft_content():
             log(f"Script stdout: {e.stdout}", "DEBUG")
         return ""
 
-def test_script_version(script_name, test_payload, test_name):
+def verify_script_version(script_name, test_payload, test_name):
     """Test a specific version of the reply script."""
     log(f"\n{'='*60}", "TEST")
     log(f"Testing: {test_name}", "TEST")
@@ -209,7 +209,7 @@ def run_all_tests():
     # log("\n" + "="*60, "TEST")
     # log("BASELINE: Original script", "TEST")
     # log("="*60, "TEST")
-    # success, message = test_script_version("reply_to_message.scpt", test_payload, "Original Script")
+    # success, message = verify_script_version("reply_to_message.scpt", test_payload, "Original Script")
     # results.append(("Original (baseline)", success, message))
     
     # if success:
@@ -220,14 +220,14 @@ def run_all_tests():
     # log("\n" + "="*60, "TEST")
     # log("Testing Fix v2: html content + delays", "TEST")
     # log("="*60, "TEST")
-    # success, message = test_script_version("reply_to_message_v2.scpt", test_payload, "Fix v2: html content + delays")
+    # success, message = verify_script_version("reply_to_message_v2.scpt", test_payload, "Fix v2: html content + delays")
     # results.append(("v2: html content + delays", success, message))
     
     # # Test v3: Content replacement with verification
     # log("\n" + "="*60, "TEST")
     # log("Testing Fix v3: Content replacement + verification", "TEST")
     # log("="*60, "TEST")
-    # success, message = test_script_version("reply_to_message_v3.scpt", test_payload, "Fix v3: Content replacement + verification")
+    # success, message = verify_script_version("reply_to_message_v3.scpt", test_payload, "Fix v3: Content replacement + verification")
     # results.append(("v3: Content replacement + verification", success, message))
     
     # # Test v4: Plain text approach
@@ -237,7 +237,7 @@ def run_all_tests():
     # # Convert HTML to plain text for this test
     # plain_text_payload = "This is line 1.\nThis is line 2.\nThis is line 3."
     # log(f"Using plain text payload: {plain_text_payload}")
-    # success, message = test_script_version("reply_to_message_v4.scpt", plain_text_payload, "Fix v4: Plain text approach")
+    # success, message = verify_script_version("reply_to_message_v4.scpt", plain_text_payload, "Fix v4: Plain text approach")
     # results.append(("v4: Plain text approach", success, message))
     
     # Test v5: UI Automation (keystrokes)
@@ -247,14 +247,14 @@ def run_all_tests():
     # Use plain text for UI automation
     plain_text_payload = "This is v5. This is line 1.\nThis is line 2.\nThis is line 3."
     log(f"Using plain text payload for UI automation: {plain_text_payload}")
-    success, message = test_script_version("reply_to_message_v5.scpt", plain_text_payload, "Fix v5: UI Automation")
+    success, message = verify_script_version("reply_to_message_v5.scpt", plain_text_payload, "Fix v5: UI Automation")
     results.append(("v5: UI Automation (keystrokes)", success, message))
     
     # Test v6: Extended delays and retries
     log("\n" + "="*60, "TEST")
     log("Testing Fix v6: Extended delays and retries", "TEST")
     log("="*60, "TEST")
-    success, message = test_script_version("reply_to_message_v6.scpt", test_payload, "Fix v6: Extended delays + retries")
+    success, message = verify_script_version("reply_to_message_v6.scpt", test_payload, "Fix v6: Extended delays + retries")
     results.append(("v6: Extended delays + retries", success, message))
     
     # Summary
