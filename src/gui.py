@@ -12,6 +12,7 @@ import llm
 # Import main script logic
 import main
 from config import CONFIG_PATH, DAYS_THRESHOLD, DEFAULT_REPLY, ENV_PATH, SYSTEM_PROMPT_PATH
+from date_utils import get_current_date_context
 
 # --- Configuration & Constants ---
 ctk.set_appearance_mode("System")
@@ -198,10 +199,17 @@ class OutlookBotGUI(ctk.CTk):
     def setup_prompt_tab(self):
         tab = self.tab_view.tab("System Prompt")
         tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure(0, weight=1)
+        tab.grid_rowconfigure(1, weight=1)
+
+        # Immutable Date Context
+        date_str = get_current_date_context()
+        self.lbl_date_context = ctk.CTkEntry(tab, fg_color="transparent", border_width=0)
+        self.lbl_date_context.insert(0, date_str)
+        self.lbl_date_context.configure(state="readonly")
+        self.lbl_date_context.grid(row=0, column=0, padx=10, pady=(10, 0), sticky="ew")
 
         self.txt_prompt = ctk.CTkTextbox(tab, wrap="word")
-        self.txt_prompt.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        self.txt_prompt.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
     def toggle_key_visibility(self):
         if self.chk_show_key.get():

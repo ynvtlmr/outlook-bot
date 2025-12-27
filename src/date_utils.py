@@ -67,3 +67,12 @@ def get_latest_date(text):
     if not dates:
         return None
     return max(dates)
+
+
+def get_current_date_context():
+    """
+    Returns a formatted string with the current date and time for the system prompt.
+    Example: "Today is Friday, December 26, 2025."
+    """
+    now = datetime.now()
+    return now.strftime("Today is %A, %B %d, %Y.")

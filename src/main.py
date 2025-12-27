@@ -4,7 +4,8 @@ from datetime import datetime
 
 import llm
 from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, SYSTEM_PROMPT_PATH, PREFERRED_MODEL
-from date_utils import get_latest_date
+
+from date_utils import get_latest_date, get_current_date_context
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
 
@@ -166,7 +167,12 @@ def main():
         # 2. Process Active Flags
         print("\n--- Processing Active Flags ---")
         client = OutlookClient(APPLESCRIPTS_DIR)
-        system_prompt = load_system_prompt()
+        # Load System Prompt and Date Context
+        base_system_prompt = load_system_prompt()
+        date_context = get_current_date_context()
+        combined_system_prompt = f"{date_context}\n\n{base_system_prompt}"
+        
+        print(f"System Prompt Context: {date_context}")
 
         # Initialize LLM Service (Detects models)
         try:
@@ -176,7 +182,7 @@ def main():
             return
 
         candidates = filter_threads_for_replies(flagged_threads)
-        process_replies(candidates, client, system_prompt, llm_service)
+        process_replies(candidates, client, combined_system_prompt, llm_service)
 
     except Exception as e:
         print(f"Error during execution: {e}")
