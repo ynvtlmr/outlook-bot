@@ -97,6 +97,31 @@ class LLMService:
             except Exception as e:
                 print(f"Warning: Failed to initialize OpenAI client: {e}")
 
+        # OpenRouter
+        self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        if self.openrouter_key:
+            try:
+                verify_option = get_ssl_verify_option(disable_ssl)
+                OR_BASE_URL = "https://openrouter.ai/api/v1"
+                
+                # Similar SSL handling for OpenRouter (via OpenAI SDK)
+                if isinstance(verify_option, str) and os.path.exists(verify_option):
+                    # Globals likely already set if OpenAI init ran, but safe to set again or rely on them
+                    os.environ["SSL_CERT_FILE"] = verify_option
+                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                    self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
+                elif isinstance(verify_option, ssl.SSLContext):
+                    import httpx
+                    httpx_client = httpx.Client(verify=verify_option)
+                    self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key, http_client=httpx_client)
+                else:
+                    self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
+            except Exception as e:
+                print(f"Warning: Failed to initialize OpenRouter client: {e}")
+                self.openrouter_client = None
+        else:
+            self.openrouter_client = None
+
     def _discover_models(self):
         """
         Query providers to find available models, filtering for cheap/fast text generation.
@@ -230,6 +255,39 @@ class LLMService:
                 import traceback
                 print(f"  -> Traceback: {traceback.format_exc()}")
 
+        # 3. OpenRouter Discovery
+        if self.openrouter_client:
+            try:
+                print("  -> Querying OpenRouter for available models...")
+                models_page = self.openrouter_client.models.list()
+                
+                count = 0
+                for m in models_page.data:
+                    mid = m.id
+                    lower_id = mid.lower()
+                    
+                    # 1. Aggressive Exclusion
+                    # Use same keywords as others
+                    if any(k in lower_id for k in EXCLUDED_KEYWORDS):
+                        continue
+                    
+                    # 2. Prefer "Cheap/Fast" ?
+                    # OpenRouter has so many, we might swamp the list.
+                    # Let's trust generic exclusions for now, but maybe prioritize popular providers?
+                    # The user can search now! So it's safer to include more.
+                    # But exclude definitely unrelated stuff.
+                    
+                    if "free" in lower_id: # "openrouter/auto" or free tiers often good to highlight?
+                        pass 
+
+                    self.available_models.append({"id": mid, "provider": "openrouter"})
+                    count += 1
+                
+                print(f"  -> Discovered {count} suitable OpenRouter models.")
+
+            except Exception as e:
+                print(f"  -> OpenRouter model discovery failed: {e}")
+
         # # Sort models by estimated cost/efficiency
         # self._sort_models_by_cost()
 
@@ -355,6 +413,8 @@ class LLMService:
                     result = self._generate_gemini(model_id, prompt)
                 elif provider == "openai":
                     result = self._generate_openai(model_id, prompt)
+                elif provider == "openrouter":
+                    result = self._generate_openrouter(model_id, prompt)
                 else:
                     continue
 
@@ -478,6 +538,19 @@ class LLMService:
                     )
                     content = completion.choices[0].message.content
                     raw_text = content if content else ""
+                elif provider == "openrouter":
+                    # OpenRouter uses OpenAI client but might point to non-OpenAI models that don't support json_object
+                    if not self.openrouter_client:
+                        continue
+                    # Try standard generation without response_format first for max compatibility
+                    completion = self.openrouter_client.chat.completions.create(
+                        model=model_id,
+                        messages=[
+                            {"role": "user", "content": full_prompt}, 
+                        ]
+                    )
+                    content = completion.choices[0].message.content
+                    raw_text = content if content else ""
 
                 # Parse JSON
                 # Clean up markdown if present
@@ -561,6 +634,46 @@ class LLMService:
             )
             # Lightweight call to list models
             list(client.models.list())
+            return True, "Connection Successful!"
+        except Exception as e:
+            return False, f"Connection Failed: {str(e)}"
+
+    def _generate_openrouter(self, model_id, prompt):
+        if not self.openrouter_client:
+            return ""
+        # Reuse OpenAI SDK logic for OpenRouter
+        completion = self.openrouter_client.chat.completions.create(
+            model=model_id,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return completion.choices[0].message.content.strip() if completion.choices[0].message.content else ""
+
+    @staticmethod
+    def test_openrouter_connection(api_key):
+        """
+        Tests connectivity to OpenRouter API.
+        """
+        if not api_key:
+            return False, "API Key is empty."
+
+        try:
+            disable_ssl = load_ssl_config_helper()
+            verify_option = get_ssl_verify_option(disable_ssl)
+            OR_BASE_URL = "https://openrouter.ai/api/v1"
+            
+            if isinstance(verify_option, str) and os.path.exists(verify_option):
+                os.environ["SSL_CERT_FILE"] = verify_option
+                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
+            elif isinstance(verify_option, ssl.SSLContext):
+                 import httpx
+                 httpx_client = httpx.Client(verify=verify_option)
+                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key, http_client=httpx_client)
+            else:
+                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
+            
+            # Lightweight call
+            client.models.list()
             return True, "Connection Successful!"
         except Exception as e:
             return False, f"Connection Failed: {str(e)}"

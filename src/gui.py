@@ -139,11 +139,25 @@ class OutlookBotGUI(ctk.CTk):
         self.btn_test_openai = ctk.CTkButton(tab, text="Test", command=self.test_openai, width=60, fg_color="#333333")
         self.btn_test_openai.grid(row=1, column=3, padx=10, pady=10)
 
+        # OpenRouter API Key
+        lbl_or = ctk.CTkLabel(tab, text="OpenRouter Key:")
+        lbl_or.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        self.entry_or_key = ctk.CTkEntry(tab, width=400, show="*")
+        self.entry_or_key.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+        
+        # Toggle visibility (OpenRouter)
+        self.chk_show_or = ctk.CTkCheckBox(tab, text="Show", command=self.toggle_or_visibility, width=60)
+        self.chk_show_or.grid(row=2, column=2, padx=10, pady=10)
+
+        # Test Button (OpenRouter)
+        self.btn_test_or = ctk.CTkButton(tab, text="Test", command=self.test_or, width=60, fg_color="#333333")
+        self.btn_test_or.grid(row=2, column=3, padx=10, pady=10)
+
         # Days Threshold
         lbl_days = ctk.CTkLabel(tab, text="Days Threshold:")
-        lbl_days.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        lbl_days.grid(row=3, column=0, padx=10, pady=10, sticky="w")
         self.entry_days = ctk.CTkEntry(tab, width=100)
-        self.entry_days.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+        self.entry_days.grid(row=3, column=1, padx=10, pady=10, sticky="w")
 
 
 
@@ -161,7 +175,7 @@ class OutlookBotGUI(ctk.CTk):
         self.combo_provider = ctk.CTkComboBox(tab, state="readonly", command=self.on_provider_change)
         self.combo_provider.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
         self.combo_provider.set("All")
-        self.combo_provider.configure(values=["All", "Gemini", "OpenAI"])
+        self.combo_provider.configure(values=["All", "Gemini", "OpenAI", "OpenRouter"])
         
         # Search Entry
         self.entry_search = ctk.CTkEntry(tab, placeholder_text="Search models...")
@@ -200,6 +214,12 @@ class OutlookBotGUI(ctk.CTk):
             self.entry_openai_key.configure(show="")
         else:
             self.entry_openai_key.configure(show="*")
+
+    def toggle_or_visibility(self):
+        if self.chk_show_or.get():
+            self.entry_or_key.configure(show="")
+        else:
+            self.entry_or_key.configure(show="*")
 
     def log(self, message):
         self.log_box.configure(state="normal")
@@ -246,6 +266,10 @@ class OutlookBotGUI(ctk.CTk):
                 openai_key = os.getenv("OPENAI_API_KEY", "")
                 self.entry_openai_key.delete(0, "end")
                 self.entry_openai_key.insert(0, openai_key)
+
+                or_key = os.getenv("OPENROUTER_API_KEY", "")
+                self.entry_or_key.delete(0, "end")
+                self.entry_or_key.insert(0, or_key)
         except OSError as e:
             self.log(f"[Error] Failed to load .env: {e}\n")
 
@@ -273,6 +297,8 @@ class OutlookBotGUI(ctk.CTk):
             self.test_gemini()
         if self.entry_openai_key.get().strip():
             self.test_openai()
+        if self.entry_or_key.get().strip():
+            self.test_or()
 
     def save_config(self):
         success = True
@@ -321,6 +347,10 @@ class OutlookBotGUI(ctk.CTk):
             new_openai_key = self.entry_openai_key.get().strip()
             dotenv.set_key(ENV_PATH, "OPENAI_API_KEY", new_openai_key)
             os.environ["OPENAI_API_KEY"] = new_openai_key
+
+            new_or_key = self.entry_or_key.get().strip()
+            dotenv.set_key(ENV_PATH, "OPENROUTER_API_KEY", new_or_key)
+            os.environ["OPENROUTER_API_KEY"] = new_or_key
         except OSError as e:
             self.log(f"[Error] Failed to save .env: {e}\n")
             success = False
@@ -404,6 +434,7 @@ class OutlookBotGUI(ctk.CTk):
             # Explicitly set ENV from UI before detecting.
             os.environ["GEMINI_API_KEY"] = self.entry_api_key.get().strip()
             os.environ["OPENAI_API_KEY"] = self.entry_openai_key.get().strip()
+            os.environ["OPENROUTER_API_KEY"] = self.entry_or_key.get().strip()
 
             service = llm.LLMService()
             # ACCESS RAW DATA instead of list strings, so we know provider
@@ -472,6 +503,8 @@ class OutlookBotGUI(ctk.CTk):
                     continue
                 if provider_filter == "OpenAI" and p != "openai":
                     continue
+                if provider_filter == "OpenRouter" and p != "openrouter":
+                    continue
             
             # Filter by Search Text
             if search_text and search_text not in mid.lower():
@@ -533,6 +566,17 @@ class OutlookBotGUI(ctk.CTk):
             # Update UI on main thread
             self.after(0, lambda: self._handle_test_result(self.btn_test_openai, success, msg))
 
+        threading.Thread(target=_target, daemon=True).start()
+
+    def test_or(self):
+        key = self.entry_or_key.get().strip()
+        self.log("[Info] Testing OpenRouter connection...\n")
+        self.btn_test_or.configure(text="...", state="disabled")
+
+        def _target():
+            success, msg = llm.LLMService.test_openrouter_connection(key)
+            self.after(0, lambda: self._handle_test_result(self.btn_test_or, success, msg))
+        
         threading.Thread(target=_target, daemon=True).start()
 
     def _handle_test_result(self, button, success, message):
