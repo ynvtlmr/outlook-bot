@@ -1,10 +1,9 @@
 import os
 import sys
+from typing import Optional
 
 import yaml
 from dotenv import load_dotenv
-
-load_dotenv()
 
 # Path Determination
 if getattr(sys, "frozen", False):
@@ -47,19 +46,17 @@ except Exception as e:
     _config_data = {}
 
 # Configuration Values
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-DAYS_THRESHOLD = _config_data.get("days_threshold", 5)
-DEFAULT_REPLY = _config_data.get(
+GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+DAYS_THRESHOLD: int = _config_data.get("days_threshold", 5)
+DEFAULT_REPLY: str = _config_data.get(
     "default_reply", "Thank you for your email. I will review it and get back to you shortly."
 )
 
-# AI Models (Now dynamic, but we might keep this list for saving preferences if needed in the future)
-# For now, we remove the hardcoded defaults entirely as requested.
-# AVAILABLE_MODELS was removed as models are now auto-discovered.
-PREFERRED_MODEL = _config_data.get("preferred_model", None)
+# Preferred model for LLM generation (None means use first available)
+PREFERRED_MODEL: Optional[str] = _config_data.get("preferred_model", None)
 
 # Parsing Delimiters
-MSG_DELIMITER = "\n///END_OF_MESSAGE///\n"
-BODY_START = "---BODY_START---"
-BODY_END = "---BODY_END---"
+MSG_DELIMITER: str = "\n///END_OF_MESSAGE///\n"
+BODY_START: str = "---BODY_START---"
+BODY_END: str = "---BODY_END---"

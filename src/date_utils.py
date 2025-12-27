@@ -7,7 +7,7 @@ except ImportError:
     import dateutil.parser as parser
 
 
-def parse_date_string(date_str):
+def parse_date_string(date_str: str | None) -> datetime:
     """
     Parses a single date string with cleaning for common Outlook/macOS oddities.
     Returns datetime object or datetime.min on failure.
@@ -24,12 +24,12 @@ def parse_date_string(date_str):
         return datetime.min
 
 
-def extract_dates_from_text(text):
+def extract_dates_from_text(text: str) -> list[datetime]:
     """
     Finds all date-like strings in the text, especially those following 'Date:' or 'On ...'.
     Returns a list of datetime objects.
     """
-    dates = []
+    dates: list[datetime] = []
 
     # Pattern 1: Outlook verbose format: "Date: Thursday, December 18, 2025 at 12:45:49 PM"
     pattern1 = re.compile(r"Date:\s+([A-Za-z]+,\s+[A-Za-z]+\s+\d+,\s+\d+\s+at\s+\d+:\d+:\d+\s+[APM]+)", re.IGNORECASE)
@@ -37,11 +37,7 @@ def extract_dates_from_text(text):
     # Pattern 2: Standard Outlook reply header: "On Dec 18, 2025, at 12:45 PM"
     pattern2 = re.compile(r"On\s+([A-Za-z]+\s+\d+,\s+\d+,\s+at\s+\d+:\d+\s+[APM]+)", re.IGNORECASE)
 
-    # Pattern 3: Simple "Date: ..." line
-    # Pattern 3: Simple "Date: ..." line
-    # pattern3 = re.compile(r"Date:\s+([A-Za-z]+,\s+[A-Za-z]+\s+\d+,\s+\d+\s+.*)", re.IGNORECASE)
-
-    # Pattern 4: Generic Date: line
+    # Pattern 3: Generic Date: line
     pattern4 = re.compile(r"^Date:\s+(.*)$", re.MULTILINE | re.IGNORECASE)
 
     # Try specific patterns first
@@ -59,7 +55,7 @@ def extract_dates_from_text(text):
     return [d for d in dates if d != datetime.min]
 
 
-def get_latest_date(text):
+def get_latest_date(text: str) -> datetime | None:
     """
     Returns the latest datetime found in the text, or None if none found.
     """
@@ -69,10 +65,11 @@ def get_latest_date(text):
     return max(dates)
 
 
-def get_current_date_context():
+def get_current_date_context() -> str:
     """
     Returns a formatted string with the current date and time for the system prompt.
     Example: "Today is Friday, December 26, 2025."
     """
     now = datetime.now()
     return now.strftime("Today is %A, %B %d, %Y.")
+

@@ -3,9 +3,8 @@ import traceback
 from datetime import datetime
 
 import llm
-from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, SYSTEM_PROMPT_PATH, PREFERRED_MODEL
-
-from date_utils import get_latest_date, get_current_date_context
+from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, PREFERRED_MODEL, SYSTEM_PROMPT_PATH
+from date_utils import get_current_date_context, get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
 

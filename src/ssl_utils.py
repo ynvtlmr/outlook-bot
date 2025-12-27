@@ -3,9 +3,10 @@ SSL Certificate Utilities for Zscaler and Corporate Proxy Support
 """
 import os
 import ssl
-import certifi
 from pathlib import Path
 from typing import Optional, Union
+
+import certifi
 
 
 def get_zscaler_cert_path() -> Optional[str]:

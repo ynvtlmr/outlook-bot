@@ -2,10 +2,8 @@ import json
 import os
 import re
 import ssl
-import yaml
 from typing import Any, Dict, List, Optional
 
-import certifi
 from google import genai
 from google.genai import types
 from openai import OpenAI
@@ -113,7 +111,11 @@ class LLMService:
                 elif isinstance(verify_option, ssl.SSLContext):
                     import httpx
                     httpx_client = httpx.Client(verify=verify_option)
-                    self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key, http_client=httpx_client)
+                    self.openrouter_client = OpenAI(
+                        base_url=OR_BASE_URL,
+                        api_key=self.openrouter_key,
+                        http_client=httpx_client
+                    )
                 else:
                     self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
             except Exception as e:
@@ -148,8 +150,7 @@ class LLMService:
             "creation",
             "edit",
             "001",
-            "002",  # Legacy numeric versions sometimes imply specialized/old
-            # "preview",
+            "002",
             "exp",
             "codex",
             "legacy",
@@ -174,31 +175,15 @@ class LLMService:
                     if any(k in lower_id for k in EXCLUDED_KEYWORDS):
                         continue
 
-                    # 2. Exclude Experimental/Unstable
-                    # (unless it's just a version suffix, but 'exp' usually implies beta)
-                    # User feedback suggests being strict.
+                    # Exclude Experimental/Unstable
                     if "exp" in lower_id:
                         continue
 
-                    # # 3. Exclude Expensive/Pro models
-                    # if any(key in lower_id for key in ["pro", "ultra"]):
-                    #     continue
-
-                    # 4. Filter out specific date-based versions (e.g. -2024-07-18, -0125)
-                    # Pattern 1: YYYY-MM-DD
+                    # Filter out specific date-based versions (e.g. -2024-07-18, -0125)
                     if re.search(r"-\d{4}-\d{2}-\d{2}", lower_id):
                         continue
-                    # Pattern 2: -MMDD or -YYYY at end? OpenAI often uses -0125, -1106
-                    # Excluding any model ending in -DDDD where D is digit
                     if re.search(r"-\d{4}$", lower_id):
-                        # Careful: gpt-4o-mini might have versions?
-                        # gpt-3.5-turbo-16k ends in 16k (not 4 digits).
-                        # gpt-3.5-turbo-0125 (ends in 4 digits).
                         continue
-
-                    # # 5. Must include "Cheap/Fast" indicators
-                    # if not any(key in lower_id for key in ["flash", "lite"]):
-                    #     continue
 
                     self.available_models.append({"id": model_id, "provider": "gemini"})
 
@@ -219,36 +204,21 @@ class LLMService:
                     if not mid.startswith("gpt"):
                         continue
 
-                    # 1. Aggressive Exclusion
+                    # Aggressive Exclusion
                     if any(k in lower_id for k in EXCLUDED_KEYWORDS):
                         continue
 
-                    # # 2. Exclude Expensive/Pro models and legacy
-                    # if "pro" in lower_id:
-                    #     continue
-                    # if "instruct" in lower_id:
-                    #     continue
-
-                    # if "gpt-4" in lower_id and "mini" not in lower_id:
-                    #     # Exclude gpt-4, gpt-4-turbo, gpt-4o (keep only mini)
-                    #     continue
-
-                    # 3. Filter out specific date-based versions (e.g. -2024-07-18, -0125)
+                    # Filter out specific date-based versions (e.g. -2024-07-18, -0125)
                     if re.search(r"-\d{4}-\d{2}-\d{2}", lower_id):
                         continue
                     if re.search(r"-\d{4}$", lower_id):
                         continue
 
-                    # # 4. Must include "Cheap/Fast" indicators
-                    # # target: gpt-4o-mini, gpt-3.5-turbo
-                    # if not any(key in lower_id for key in ["mini", "turbo"]):
-                    #     continue
-
                     self.available_models.append({"id": mid, "provider": "openai"})
                 
                 if len(self.available_models) == 0:
-                    print(f"  -> Warning: No OpenAI models passed filtering criteria")
-                    print(f"  -> Consider checking filter rules if models are expected")
+                    print("  -> Warning: No OpenAI models passed filtering criteria")
+                    print("  -> Consider checking filter rules if models are expected")
 
             except Exception as e:
                 print(f"  -> OpenAI model discovery failed: {e}")
@@ -266,19 +236,9 @@ class LLMService:
                     mid = m.id
                     lower_id = mid.lower()
                     
-                    # 1. Aggressive Exclusion
-                    # Use same keywords as others
+                    # Aggressive Exclusion
                     if any(k in lower_id for k in EXCLUDED_KEYWORDS):
                         continue
-                    
-                    # 2. Prefer "Cheap/Fast" ?
-                    # OpenRouter has so many, we might swamp the list.
-                    # Let's trust generic exclusions for now, but maybe prioritize popular providers?
-                    # The user can search now! So it's safer to include more.
-                    # But exclude definitely unrelated stuff.
-                    
-                    if "free" in lower_id: # "openrouter/auto" or free tiers often good to highlight?
-                        pass 
 
                     self.available_models.append({"id": mid, "provider": "openrouter"})
                     count += 1
@@ -288,9 +248,6 @@ class LLMService:
             except Exception as e:
                 print(f"  -> OpenRouter model discovery failed: {e}")
 
-        # # Sort models by estimated cost/efficiency
-        # self._sort_models_by_cost()
-
         if not self.available_models:
             print("  -> No suitable cheap/fast models found. Please check API Keys.")
         else:
@@ -299,68 +256,6 @@ class LLMService:
                 + ", ".join([m["id"] for m in self.available_models])
             )
 
-    def _sort_models_by_cost(self):
-        """
-        Sorts self.available_models based on capability (most capable first).
-
-        Sort Keys (reversed for most capable first):
-        1. Priority (Descending): 3 (Most Capable) -> 2 -> 1 -> 0 (Least Capable)
-        2. Version (Descending): Newer/higher versions preferred within same priority.
-        3. Name (Ascending): Alphabetical tie-break.
-
-        Priority 0 (Least Capable): Gemini Lite, GPT-4o-mini, GPT-5-mini
-        Priority 1 (Very Capable): Gemini Flash
-        Priority 2 (Capable): GPT-3.5-Turbo
-        Priority 3 (Most Capable): Others
-        """
-
-        def get_sort_key(model_entry):
-            mid = model_entry["id"].lower()
-
-            # --- 1. Priority Score ---
-            priority = 3  # Default (most capable)
-
-            if "lite" in mid:
-                priority = 0  # Least capable
-            # Avoid matching 'mini' inside 'gemini'
-            elif "mini" in mid and "gemini" not in mid:
-                priority = 0  # Least capable
-
-            elif "flash" in mid:
-                priority = 1
-
-            elif "turbo" in mid:
-                priority = 2
-
-            # --- 2. Version Extraction ---
-            # Finds the first identifying number sequence (e.g. 2.5, 3.5, 4, 5)
-            # handle '4o' as 4.0 if not explicit 4.5
-            # We look for (\d+(\.\d+)?)
-            version = 0.0
-            search = re.search(r"(\d+(\.\d+)?)", mid)
-            if search:
-                try:
-                    version = float(search.group(1))
-                except ValueError:
-                    version = 0.0
-
-            # Additional heuristic: '4o' is usually better/newer than '4', but '4.1' might be better.
-            # If we see 'gpt-4o', maybe bump version slightly if it parsed as 4.0?
-            if "gpt-4o" in mid and version == 4.0:
-                version = 4.5  # Arbitrary bump to rank above standard 4.0 if needed
-
-            # We want DESCENDING priority and version (most capable first).
-            # Python sorts tuples element-wise, so we negate to reverse order.
-            # Higher priority and version should come first, so we use negative values.
-
-            return (-priority, -version, mid)
-
-        # Debug sort keys
-        # print("DEBUG SORT KEYS:")
-        # for m in self.available_models:
-        #    print(f"{m['id']}: {get_sort_key(m)}")
-
-        self.available_models.sort(key=get_sort_key)
 
     def get_models_list(self):
         """Returns list of model names for display."""

@@ -3,7 +3,6 @@ import sys
 import threading
 
 import customtkinter as ctk
-from tkinter import filedialog
 import dotenv
 import yaml
 
@@ -211,23 +210,18 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_prompt = ctk.CTkTextbox(tab, wrap="word")
         self.txt_prompt.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
-    def toggle_key_visibility(self):
-        if self.chk_show_key.get():
-            self.entry_api_key.configure(show="")
-        else:
-            self.entry_api_key.configure(show="*")
+    def _toggle_visibility(self, checkbox: ctk.CTkCheckBox, entry: ctk.CTkEntry) -> None:
+        """Toggle password visibility for an entry field based on checkbox state."""
+        entry.configure(show="" if checkbox.get() else "*")
 
-    def toggle_openai_visibility(self):
-        if self.chk_show_openai.get():
-            self.entry_openai_key.configure(show="")
-        else:
-            self.entry_openai_key.configure(show="*")
+    def toggle_key_visibility(self) -> None:
+        self._toggle_visibility(self.chk_show_key, self.entry_api_key)
 
-    def toggle_or_visibility(self):
-        if self.chk_show_or.get():
-            self.entry_or_key.configure(show="")
-        else:
-            self.entry_or_key.configure(show="*")
+    def toggle_openai_visibility(self) -> None:
+        self._toggle_visibility(self.chk_show_openai, self.entry_openai_key)
+
+    def toggle_or_visibility(self) -> None:
+        self._toggle_visibility(self.chk_show_or, self.entry_or_key)
 
     def log(self, message):
         self.log_box.configure(state="normal")
@@ -452,7 +446,7 @@ class OutlookBotGUI(ctk.CTk):
             self.available_models_data = models_data # store list of dicts
 
             if not models_data:
-                 self.log(f"[Warning] No models detected. Please check API keys.\n")
+                 self.log("[Warning] No models detected. Please check API keys.\n")
                  self.combo_model.configure(values=["No models available"])
                  self.combo_model.set("No models available")
                  return
@@ -557,42 +551,48 @@ class OutlookBotGUI(ctk.CTk):
             self.stop_bot()
         self.destroy()
 
-    def test_gemini(self):
-        key = self.entry_api_key.get().strip()
-        self.log("[Info] Testing Gemini connection...\n")
-        self.btn_test_gemini.configure(text="...", state="disabled")
+    def _test_connection(
+        self,
+        provider: str,
+        key: str,
+        button: ctk.CTkButton,
+        test_fn: callable
+    ) -> None:
+        """Generic connection test handler for any provider."""
+        self.log(f"[Info] Testing {provider} connection...\n")
+        button.configure(text="...", state="disabled")
 
         def _target():
-            success, msg = llm.LLMService.test_gemini_connection(key)
-            # Update UI on main thread
-            self.after(0, lambda: self._handle_test_result(self.btn_test_gemini, success, msg))
+            success, msg = test_fn(key)
+            self.after(0, lambda: self._handle_test_result(button, success, msg))
 
         threading.Thread(target=_target, daemon=True).start()
 
-    def test_openai(self):
-        key = self.entry_openai_key.get().strip()
-        self.log("[Info] Testing OpenAI connection...\n")
-        self.btn_test_openai.configure(text="...", state="disabled")
+    def test_gemini(self) -> None:
+        self._test_connection(
+            "Gemini",
+            self.entry_api_key.get().strip(),
+            self.btn_test_gemini,
+            llm.LLMService.test_gemini_connection
+        )
 
-        def _target():
-            success, msg = llm.LLMService.test_openai_connection(key)
-            # Update UI on main thread
-            self.after(0, lambda: self._handle_test_result(self.btn_test_openai, success, msg))
+    def test_openai(self) -> None:
+        self._test_connection(
+            "OpenAI",
+            self.entry_openai_key.get().strip(),
+            self.btn_test_openai,
+            llm.LLMService.test_openai_connection
+        )
 
-        threading.Thread(target=_target, daemon=True).start()
+    def test_or(self) -> None:
+        self._test_connection(
+            "OpenRouter",
+            self.entry_or_key.get().strip(),
+            self.btn_test_or,
+            llm.LLMService.test_openrouter_connection
+        )
 
-    def test_or(self):
-        key = self.entry_or_key.get().strip()
-        self.log("[Info] Testing OpenRouter connection...\n")
-        self.btn_test_or.configure(text="...", state="disabled")
-
-        def _target():
-            success, msg = llm.LLMService.test_openrouter_connection(key)
-            self.after(0, lambda: self._handle_test_result(self.btn_test_or, success, msg))
-        
-        threading.Thread(target=_target, daemon=True).start()
-
-    def _handle_test_result(self, button, success, message):
+    def _handle_test_result(self, button: ctk.CTkButton, success: bool, message: str) -> None:
         button.configure(text="Test", state="normal")
         if success:
             button.configure(fg_color="green", hover_color="darkgreen")

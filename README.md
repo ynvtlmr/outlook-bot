@@ -1,165 +1,240 @@
 # Outlook Bot
 
-A local automation tool for macOS that bridges Microsoft Outlook with Google's Gemini models. It uses AppleScript for local data access and Python for logic and AI interaction.
+A macOS automation tool that bridges Microsoft Outlook with LLM providers (Gemini, OpenAI, OpenRouter) to automatically generate email reply drafts. Uses AppleScript for local Outlook access and Python for logic and AI integration.
 
-## Core Features
+## How It Works
 
-### 1. Flagged Email Responder (`main.py`)
-Automatically drafts replies for emails you have flagged in Outlook.
-- **Workflow**: 
-    1. Scans Outlook for threads containing messages with an **"Active"** flag.
-    2. Extracts the full conversation context (not just the tagged email).
-    3. Checks if a reply is actually needed (filters out threads where you replied recently).
-    4. Uses **Gemini** or **OpenAI** to generate a draft reply based on your `system_prompt.txt`.
-    5. Creates the draft in Outlook for your review.
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           OUTLOOK BOT WORKFLOW                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   1. SCAN           2. FILTER          3. GENERATE       4. CREATE     │
+│   ┌─────────┐       ┌─────────┐        ┌─────────┐      ┌─────────┐   │
+│   │ Outlook │──────▶│  Age &  │───────▶│   LLM   │─────▶│  Draft  │   │
+│   │ Flagged │       │  Flag   │        │  Reply  │      │ in      │   │
+│   │ Emails  │       │  Check  │        │         │      │ Outlook │   │
+│   └─────────┘       └─────────┘        └─────────┘      └─────────┘   │
+│                                                                         │
+│   AppleScript       Python Logic       Gemini/OpenAI    AppleScript    │
+│                                        /OpenRouter                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Scans Outlook** for email threads with an **"Active"** flag
+2. **Filters threads** that haven't had activity for X days (configurable)
+3. **Generates replies** using your configured LLM with a customizable persona
+4. **Creates drafts** in Outlook for your review before sending
+
+## Features
+
+- **Multi-Provider LLM Support**: Gemini, OpenAI, and OpenRouter with automatic model discovery
+- **Batch Processing**: Generates multiple replies in a single API call
+- **GUI Configuration**: No code editing required for day-to-day use
+- **Customizable Persona**: Define your writing style via `system_prompt.txt`
+- **Smart Filtering**: Only processes stale threads, ignoring recent conversations
+- **Corporate SSL Support**: Handles Zscaler and other corporate proxy certificates
 
 ---
 
-## Setup Guide
+## Requirements
 
-### 1. Prerequisites
-- **macOS**: Required for AppleScript support.
-- **Microsoft Outlook for Mac**: Must be running.
-    - *Note: "Legacy Outlook" mode is recommended for best AppleScript compatibility.*
-- **Python**: 3.13 (Managed by `uv`).
-- **Google Cloud API Key**: For Gemini access.
+| Requirement | Details |
+|-------------|---------|
+| **OS** | macOS (AppleScript required) |
+| **Outlook** | Microsoft Outlook for Mac (Legacy mode recommended) |
+| **Python** | 3.13+ (managed by `uv`) |
+| **API Key** | At least one: Gemini, OpenAI, or OpenRouter |
 
-### 2. Installation
+> **Note**: The "New Outlook" has limited AppleScript support. For best results, use **Help → Revert to Legacy Outlook**.
 
- Clone the repository and install dependencies using `uv`:
+---
+
+## Quick Start
+
+### 1. Clone & Install
+
 ```bash
 git clone <repository_url>
 cd outlook-bot
-# If you don't have uv installed:
+
+# Install uv if needed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Sync dependencies and set up environment
+# Install dependencies
 uv sync
 ```
 
-### 3. Configuration
+### 2. Configure API Key
 
-#### API Key
-1. Get an API key from [Google AI Studio](https://aistudio.google.com/).
-2. Create a `.env` file in the project root:
-   ```bash
-   touch .env
-   ```
-3. Add your key to the file:
-   ```env
-   GEMINI_API_KEY=your_key_here
-   ```
+Get an API key from one of:
+- [Google AI Studio](https://aistudio.google.com/) (Gemini)
+- [OpenAI Platform](https://platform.openai.com/) (OpenAI)
+- [OpenRouter](https://openrouter.ai/) (OpenRouter)
 
-#### Customization
-- **Persona**: Edit `system_prompt.txt` to change how the AI writes (e.g., tone, style, signature).
-- **Settings**: Edit `config.yaml` to change the `days_threshold` or the list of `available_models`.
+Create a `.env` file:
 
----
+```bash
+echo "GEMINI_API_KEY=your_key_here" > .env
+# Or for OpenAI:
+# echo "OPENAI_API_KEY=your_key_here" > .env
+# Or for OpenRouter:
+# echo "OPENROUTER_API_KEY=your_key_here" > .env
+```
 
-## Usage
+### 3. Customize Persona
 
-You can run the bot using either the Graphical User Interface (GUI) or the Command Line Interface (CLI).
+Edit `system_prompt.txt` to define how the AI writes emails:
 
-### Graphical User Interface (GUI)
-The GUI is the recommended way to manage settings and run the bot.
+```text
+You are [Your Name], a [your role].
+Your emails are short, professional, and friendly.
+Sign off with "[Your Name]".
+```
 
-**Launch the GUI:**
+### 4. Run the Bot
+
+**GUI Mode (Recommended):**
 ```bash
 uv run python src/gui.py
 ```
 
-**Features:**
-- **Control Panel**: Start/Stop the bot and "Save All Settings" with a single click.
-    - *Note: "Stop" will wait for the current ongoing task to finish.*
-- **Configuration Tab**:
-    - **Gemini API Key**: Manage your key securely (toggles visibility).
-    - **Days Threshold**: Set the lookback period for email threads.
-    - **Default Reply**: Edit the fallback message.
-    - **Available Models**: Update the list of Gemini models.
-- **System Prompt Tab**: Edit the `system_prompt.txt` file to adjust the bot's persona and instructions.
-- **Console Output**: View real-time logs directly in the application window.
-
-### Command Line Interface (CLI)
-Alternatively, you can run the automation script directly from the terminal. This uses the current settings in `config.yaml` and `.env`.
-
+**CLI Mode:**
 ```bash
 uv run python src/main.py
 ```
 
 ---
 
+## Configuration
+
+### `config.yaml`
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `days_threshold` | `5` | Minimum days since last activity before a reply is generated |
+| `default_reply` | `"Thank you..."` | Fallback message if all LLM providers fail |
+| `preferred_model` | `null` | Specific model to try first (e.g., `gemini-1.5-flash`) |
+
+### `.env`
+
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+
+---
+
+## GUI Features
+
+| Tab | Features |
+|-----|----------|
+| **Configuration** | API keys, days threshold, default reply, model selection |
+| **System Prompt** | Edit persona and writing style |
+| **Console Output** | Real-time logs and status |
+
+**Controls:**
+- **START BOT**: Runs the email processing pipeline
+- **STOP**: Waits for current task to complete, then stops
+- **Save All Settings**: Persists all configuration changes
+- **Test Buttons**: Verify API connectivity for each provider
+
+---
+
 ## Development
 
-This project uses modern Python tooling for code quality.
+### Commands
 
-### Linting & Formatting
-We use `ruff` for both linting and formatting.
 ```bash
-# Check for linting errors
-uv run ruff check .
+# Run tests
+uv run pytest
 
-# Fix linting errors automatically
-uv run ruff check . --fix
+# Run tests with coverage
+uv run pytest --cov=src tests/
+
+# Lint code
+uv run ruff check .
 
 # Format code
 uv run ruff format .
-```
 
-### Type Checking
-We use `ty` (or static analysis tools) for type safety.
-```bash
+# Type check
 uv run ty check .
 ```
-### Testing
-Run the automated test suite with `pytest`:
-```bash
-# Run all tests
-uv run pytest
 
-# Run integration tests only
-uv run pytest tests/integration/
+### Project Structure
 
-# Run unit tests only
-uv run pytest tests/unit/
+```
+outlook-bot/
+├── src/
+│   ├── main.py           # CLI entry point & orchestration
+│   ├── gui.py            # CustomTkinter GUI
+│   ├── llm.py            # LLM providers (Gemini, OpenAI, OpenRouter)
+│   ├── scraper.py        # AppleScript output parser
+│   ├── outlook_client.py # AppleScript execution wrapper
+│   ├── date_utils.py     # Date parsing utilities
+│   ├── ssl_utils.py      # SSL/Zscaler certificate handling
+│   ├── config.py         # Configuration loading
+│   └── apple_scripts/    # AppleScript files for Outlook
+├── tests/
+│   ├── unit/             # Unit tests
+│   ├── integration/      # Integration tests
+│   └── diagnostics/      # Debugging scripts
+├── config.yaml           # User configuration
+├── system_prompt.txt     # LLM persona definition
+└── .env                  # API keys (gitignored)
 ```
 
 ---
 
 ## Building for macOS
 
-If you prefer to run the tool as a standalone application (`.app`) without needing to touch the terminal, you can build it yourself or download a release.
-
-### 1. Build Locally
-You can package the Python scripts into a macOS application using PyInstaller:
+### Local Build
 
 ```bash
 uv run pyinstaller outlook_bot.spec
 ```
-The application will be created in the `dist/` folder as `OutlookBot.app`.
 
-### 2. GitHub Actions (CI/CD)
-This project includes a specific GitHub workflow (`.github/workflows/build_app.yml`) that automatically builds and creates releases for both **Intel** and **Apple Silicon (M1/M2/M3)** Macs whenever a new tag (e.g., `v1.0`) is pushed.
+The app will be created at `dist/OutlookBot.app`.
+
+### Standalone App Data
+
+When running as a packaged `.app`:
+- Configuration stored in `~/Documents/OutlookBot/`
+- First run creates this directory automatically
+- Updates won't affect saved settings
 
 ---
 
-## Standalone App Data
-If you run the packaged `OutlookBot.app`:
-- **Configuration & Logs**: All data is stored in `~/Documents/OutlookBot/`.
-    - This keeps your application bundle clean and allows updates without losing settings.
-- **First Run**: The app will automatically create this directory. use the GUI to configure your API key and settings, and they will be saved here.
-
-## Project Structure
-
-- **`src/gui.py`**: The Graphical User Interface (GUI) entry point.
-- **`src/main.py`**: The primary logic script (CLI entry point).
-- **`src/llm.py`**: Handles interactions with Gemini & OpenAI SDKs.
-- **`src/scraper.py`**: logic for parsing raw Outlook text data into Python dictionaries.
-- **`src/outlook_client.py`**: Wrapper for executing AppleScripts.
-- **`src/date_utils.py`**: Utilities for parsing various date formats.
-- **`src/apple_scripts/`**: Raw AppleScript files used to query the Outlook application.
-- **`output/`**: Directory where scraped thread logs are saved for debugging.
-
 ## Troubleshooting
 
-- **Permissions**: The first time you run this, macOS will ask for permission for Terminal (or your IDE) to control "Microsoft Outlook". You must allow this.
-- **"New Outlook"**: If the scripts hang or return no data, ensure you are using "Legacy Outlook" (Help > Revert to Legacy Outlook) as the new version has limited AppleScript support.
+### "Outlook not responding" or empty data
+
+1. Ensure Outlook is running
+2. Switch to Legacy Outlook: **Help → Revert to Legacy Outlook**
+3. Grant Terminal/IDE permission to control Outlook when prompted
+
+### SSL Certificate Errors
+
+The app includes automatic Zscaler certificate handling. If issues persist:
+1. SSL verification is disabled by default for corporate environments
+2. Check `ssl_utils.py` for certificate bundle locations
+
+### No models detected
+
+1. Check your API key is valid
+2. Use the **Test** buttons in GUI to verify connectivity
+3. Check console output for error messages
+
+### Drafts created with empty content
+
+This is a known limitation of Outlook's AppleScript API. The app uses UI automation (keystrokes) as a workaround. If this fails:
+1. Ensure Outlook has focus when the script runs
+2. Increase delays in `reply_to_message.scpt` if timing issues occur
+
+---
+
+## License
+
+MIT
