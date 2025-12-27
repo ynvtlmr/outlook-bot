@@ -84,5 +84,3 @@ PREFERRED_MODEL: Optional[str] = _config_data.get("preferred_model", None)
 MSG_DELIMITER: str = "\n///END_OF_MESSAGE///\n"
 BODY_START: str = "---BODY_START---"
 BODY_END: str = "---BODY_END---"
-
-
