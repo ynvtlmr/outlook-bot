@@ -40,3 +40,16 @@ def test_reply_to_message(mocker):
     args = mock_run.call_args[0][0]
     assert "msg1" in args
     assert "Body" in args
+
+
+def test_activate_outlook(mocker):
+    """Test calling activate_outlook script."""
+    mocker.patch("os.path.exists", return_value=True)
+    mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(stdout="", returncode=0))
+
+    client = OutlookClient("/scripts")
+    client.activate_outlook()
+
+    # Verify correct script name was used
+    args = mock_run.call_args[0][0]
+    assert "activate_outlook.scpt" in args[-1]
