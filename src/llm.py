@@ -2,15 +2,39 @@ import json
 import os
 import re
 import ssl
-import yaml
 from typing import Any, Dict, List, Optional
 
-import certifi
 from google import genai
 from google.genai import types
 from openai import OpenAI
 
-from ssl_utils import get_ssl_verify_option
+from config import CredentialManager
+from ssl_utils import get_ssl_verify_option, setup_ssl_environment
+
+# Model exclusion keywords for filtering out non-text/specialized models
+EXCLUDED_MODEL_KEYWORDS = [
+    "image",
+    "vision",
+    "audio",
+    "video",
+    "tts",
+    "speech",
+    "transcribe",
+    "whisper",
+    "dall-e",
+    "embedding",
+    "search",
+    "moderation",
+    "realtime",
+    "creation",
+    "edit",
+    "001",
+    "002",
+    "exp",
+    "codex",
+    "legacy",
+    "robotics",
+]
 
 
 def load_ssl_config_helper():
@@ -23,12 +47,23 @@ def load_ssl_config_helper():
     return True
 
 
+def _extract_json(text: str) -> Any:
+    """Helper to extract and parse JSON from LLM response text."""
+    clean_text = text.strip()
+    if clean_text.startswith("```json"):
+        clean_text = clean_text[7:]
+    if clean_text.startswith("```"):
+        clean_text = clean_text[3:]
+    if clean_text.endswith("```"):
+        clean_text = clean_text[:-3]
+    return json.loads(clean_text)
 
 
 class LLMService:
     def __init__(self):
-        self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.openai_key = os.getenv("OPENAI_API_KEY")
+        self.gemini_key = CredentialManager.get_gemini_key()
+        self.openai_key = CredentialManager.get_openai_key()
+        self.openrouter_key = CredentialManager.get_openrouter_key()
 
         self.gemini_client: Optional[genai.Client] = None
         self.openai_client: Optional[OpenAI] = None
@@ -43,35 +78,18 @@ class LLMService:
     def _init_clients(self):
         disable_ssl = load_ssl_config_helper()
         if disable_ssl:
-            print("[Security Warning] SSL Verification is DISABLED via config.yaml")
-        
+            print("[Security Warning] SSL Verification is DISABLED (hardcoded for Zscaler compatibility)")
+
         # Gemini
         if self.gemini_key:
             try:
                 # Use ssl_utils to get the best verify option (Path or SSL Context)
                 verify_option = get_ssl_verify_option(disable_ssl)
-                
-                # Global ENV Configuration for robustness (Fixes OpenAI and others)
-                if isinstance(verify_option, str) and os.path.exists(verify_option):
-                    print(f"[Info] Using merged certificate bundle: {verify_option}")
-                    print(f"Global SSL Configuration: Setting SSL_CERT_FILE to {verify_option}")
-                    os.environ["SSL_CERT_FILE"] = verify_option
-                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
-                elif isinstance(verify_option, ssl.SSLContext):
-                    print("[Info] SSL verification disabled (using CERT_NONE context)")
-                    # Clear env vars that might point to failing bundles when SSL is disabled
-                    # This ensures the SSL context is used instead of env vars
-                    if "SSL_CERT_FILE" in os.environ:
-                        del os.environ["SSL_CERT_FILE"]
-                    if "REQUESTS_CA_BUNDLE" in os.environ:
-                        del os.environ["REQUESTS_CA_BUNDLE"]
-                
-                self.gemini_client = genai.Client(
-                    api_key=self.gemini_key, 
-                    http_options=types.HttpOptions(client_args={"verify": verify_option})
-                )
-                
+                setup_ssl_environment(verify_option)
 
+                self.gemini_client = genai.Client(
+                    api_key=self.gemini_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
+                )
             except Exception as e:
                 print(f"Warning: Failed to initialize Gemini client: {e}")
 
@@ -80,15 +98,17 @@ class LLMService:
             try:
                 # Use the same SSL configuration approach as test_openai_connection
                 verify_option = get_ssl_verify_option(disable_ssl)
-                
+                # Environment setup already handled above if gemini key existed, but duplicate call is safe/idempotent
+                if not self.gemini_key:
+                    setup_ssl_environment(verify_option)
+
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
                     # Use certificate bundle via environment variables
-                    os.environ["SSL_CERT_FILE"] = verify_option
-                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                     self.openai_client = OpenAI(api_key=self.openai_key)
                 elif isinstance(verify_option, ssl.SSLContext):
                     # For CERT_NONE, use custom httpx client
                     import httpx
+
                     httpx_client = httpx.Client(verify=verify_option)
                     self.openai_client = OpenAI(api_key=self.openai_key, http_client=httpx_client)
                 else:
@@ -98,22 +118,26 @@ class LLMService:
                 print(f"Warning: Failed to initialize OpenAI client: {e}")
 
         # OpenRouter
-        self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        self.openrouter_key = CredentialManager.get_openrouter_key()
         if self.openrouter_key:
             try:
                 verify_option = get_ssl_verify_option(disable_ssl)
+                if not self.gemini_key and not self.openai_key:
+                    setup_ssl_environment(verify_option)
+
                 OR_BASE_URL = "https://openrouter.ai/api/v1"
-                
+
                 # Similar SSL handling for OpenRouter (via OpenAI SDK)
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
-                    # Globals likely already set if OpenAI init ran, but safe to set again or rely on them
-                    os.environ["SSL_CERT_FILE"] = verify_option
-                    os.environ["REQUESTS_CA_BUNDLE"] = verify_option
+                    # Globals likely already set if OpenAI/Gemini init ran
                     self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
                 elif isinstance(verify_option, ssl.SSLContext):
                     import httpx
+
                     httpx_client = httpx.Client(verify=verify_option)
-                    self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key, http_client=httpx_client)
+                    self.openrouter_client = OpenAI(
+                        base_url=OR_BASE_URL, api_key=self.openrouter_key, http_client=httpx_client
+                    )
                 else:
                     self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
             except Exception as e:
@@ -130,32 +154,6 @@ class LLMService:
         self.available_models = []
         print("Detecting available LLM models...")
 
-        # Common exclusions for any provider
-        EXCLUDED_KEYWORDS = [
-            "image",
-            "vision",
-            "audio",
-            "video",
-            "tts",
-            "speech",
-            "transcribe",
-            "whisper",
-            "dall-e",
-            "embedding",
-            "search",
-            "moderation",
-            "realtime",
-            "creation",
-            "edit",
-            "001",
-            "002",  # Legacy numeric versions sometimes imply specialized/old
-            # "preview",
-            "exp",
-            "codex",
-            "legacy",
-            "robotics",
-        ]
-
         # 1. Gemini Discovery
         if self.gemini_client:
             try:
@@ -171,34 +169,18 @@ class LLMService:
                         continue
 
                     # 1. Aggressive Exclusion
-                    if any(k in lower_id for k in EXCLUDED_KEYWORDS):
+                    if any(k in lower_id for k in EXCLUDED_MODEL_KEYWORDS):
                         continue
 
-                    # 2. Exclude Experimental/Unstable
-                    # (unless it's just a version suffix, but 'exp' usually implies beta)
-                    # User feedback suggests being strict.
+                    # Exclude Experimental/Unstable
                     if "exp" in lower_id:
                         continue
 
-                    # # 3. Exclude Expensive/Pro models
-                    # if any(key in lower_id for key in ["pro", "ultra"]):
-                    #     continue
-
-                    # 4. Filter out specific date-based versions (e.g. -2024-07-18, -0125)
-                    # Pattern 1: YYYY-MM-DD
+                    # Filter out specific date-based versions (e.g. -2024-07-18, -0125)
                     if re.search(r"-\d{4}-\d{2}-\d{2}", lower_id):
                         continue
-                    # Pattern 2: -MMDD or -YYYY at end? OpenAI often uses -0125, -1106
-                    # Excluding any model ending in -DDDD where D is digit
                     if re.search(r"-\d{4}$", lower_id):
-                        # Careful: gpt-4o-mini might have versions?
-                        # gpt-3.5-turbo-16k ends in 16k (not 4 digits).
-                        # gpt-3.5-turbo-0125 (ends in 4 digits).
                         continue
-
-                    # # 5. Must include "Cheap/Fast" indicators
-                    # if not any(key in lower_id for key in ["flash", "lite"]):
-                    #     continue
 
                     self.available_models.append({"id": model_id, "provider": "gemini"})
 
@@ -219,40 +201,26 @@ class LLMService:
                     if not mid.startswith("gpt"):
                         continue
 
-                    # 1. Aggressive Exclusion
-                    if any(k in lower_id for k in EXCLUDED_KEYWORDS):
+                    # Aggressive Exclusion
+                    if any(k in lower_id for k in EXCLUDED_MODEL_KEYWORDS):
                         continue
 
-                    # # 2. Exclude Expensive/Pro models and legacy
-                    # if "pro" in lower_id:
-                    #     continue
-                    # if "instruct" in lower_id:
-                    #     continue
-
-                    # if "gpt-4" in lower_id and "mini" not in lower_id:
-                    #     # Exclude gpt-4, gpt-4-turbo, gpt-4o (keep only mini)
-                    #     continue
-
-                    # 3. Filter out specific date-based versions (e.g. -2024-07-18, -0125)
+                    # Filter out specific date-based versions (e.g. -2024-07-18, -0125)
                     if re.search(r"-\d{4}-\d{2}-\d{2}", lower_id):
                         continue
                     if re.search(r"-\d{4}$", lower_id):
                         continue
 
-                    # # 4. Must include "Cheap/Fast" indicators
-                    # # target: gpt-4o-mini, gpt-3.5-turbo
-                    # if not any(key in lower_id for key in ["mini", "turbo"]):
-                    #     continue
-
                     self.available_models.append({"id": mid, "provider": "openai"})
-                
+
                 if len(self.available_models) == 0:
-                    print(f"  -> Warning: No OpenAI models passed filtering criteria")
-                    print(f"  -> Consider checking filter rules if models are expected")
+                    print("  -> Warning: No OpenAI models passed filtering criteria")
+                    print("  -> Consider checking filter rules if models are expected")
 
             except Exception as e:
                 print(f"  -> OpenAI model discovery failed: {e}")
                 import traceback
+
                 print(f"  -> Traceback: {traceback.format_exc()}")
 
         # 3. OpenRouter Discovery
@@ -260,36 +228,23 @@ class LLMService:
             try:
                 print("  -> Querying OpenRouter for available models...")
                 models_page = self.openrouter_client.models.list()
-                
+
                 count = 0
                 for m in models_page.data:
                     mid = m.id
                     lower_id = mid.lower()
-                    
-                    # 1. Aggressive Exclusion
-                    # Use same keywords as others
-                    if any(k in lower_id for k in EXCLUDED_KEYWORDS):
+
+                    # Aggressive Exclusion
+                    if any(k in lower_id for k in EXCLUDED_MODEL_KEYWORDS):
                         continue
-                    
-                    # 2. Prefer "Cheap/Fast" ?
-                    # OpenRouter has so many, we might swamp the list.
-                    # Let's trust generic exclusions for now, but maybe prioritize popular providers?
-                    # The user can search now! So it's safer to include more.
-                    # But exclude definitely unrelated stuff.
-                    
-                    if "free" in lower_id: # "openrouter/auto" or free tiers often good to highlight?
-                        pass 
 
                     self.available_models.append({"id": mid, "provider": "openrouter"})
                     count += 1
-                
+
                 print(f"  -> Discovered {count} suitable OpenRouter models.")
 
             except Exception as e:
                 print(f"  -> OpenRouter model discovery failed: {e}")
-
-        # # Sort models by estimated cost/efficiency
-        # self._sort_models_by_cost()
 
         if not self.available_models:
             print("  -> No suitable cheap/fast models found. Please check API Keys.")
@@ -299,69 +254,6 @@ class LLMService:
                 + ", ".join([m["id"] for m in self.available_models])
             )
 
-    def _sort_models_by_cost(self):
-        """
-        Sorts self.available_models based on capability (most capable first).
-
-        Sort Keys (reversed for most capable first):
-        1. Priority (Descending): 3 (Most Capable) -> 2 -> 1 -> 0 (Least Capable)
-        2. Version (Descending): Newer/higher versions preferred within same priority.
-        3. Name (Ascending): Alphabetical tie-break.
-
-        Priority 0 (Least Capable): Gemini Lite, GPT-4o-mini, GPT-5-mini
-        Priority 1 (Very Capable): Gemini Flash
-        Priority 2 (Capable): GPT-3.5-Turbo
-        Priority 3 (Most Capable): Others
-        """
-
-        def get_sort_key(model_entry):
-            mid = model_entry["id"].lower()
-
-            # --- 1. Priority Score ---
-            priority = 3  # Default (most capable)
-
-            if "lite" in mid:
-                priority = 0  # Least capable
-            # Avoid matching 'mini' inside 'gemini'
-            elif "mini" in mid and "gemini" not in mid:
-                priority = 0  # Least capable
-
-            elif "flash" in mid:
-                priority = 1
-
-            elif "turbo" in mid:
-                priority = 2
-
-            # --- 2. Version Extraction ---
-            # Finds the first identifying number sequence (e.g. 2.5, 3.5, 4, 5)
-            # handle '4o' as 4.0 if not explicit 4.5
-            # We look for (\d+(\.\d+)?)
-            version = 0.0
-            search = re.search(r"(\d+(\.\d+)?)", mid)
-            if search:
-                try:
-                    version = float(search.group(1))
-                except ValueError:
-                    version = 0.0
-
-            # Additional heuristic: '4o' is usually better/newer than '4', but '4.1' might be better.
-            # If we see 'gpt-4o', maybe bump version slightly if it parsed as 4.0?
-            if "gpt-4o" in mid and version == 4.0:
-                version = 4.5  # Arbitrary bump to rank above standard 4.0 if needed
-
-            # We want DESCENDING priority and version (most capable first).
-            # Python sorts tuples element-wise, so we negate to reverse order.
-            # Higher priority and version should come first, so we use negative values.
-
-            return (-priority, -version, mid)
-
-        # Debug sort keys
-        # print("DEBUG SORT KEYS:")
-        # for m in self.available_models:
-        #    print(f"{m['id']}: {get_sort_key(m)}")
-
-        self.available_models.sort(key=get_sort_key)
-
     def get_models_list(self):
         """Returns list of model names for display."""
         return [m["id"] for m in self.available_models]
@@ -369,8 +261,9 @@ class LLMService:
     def refresh_models(self):
         """Re-initializes clients and rediscovers models (useful for GUI)."""
         # Reload env vars in case they changed in memory
-        self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.openai_key = os.getenv("OPENAI_API_KEY")
+        self.gemini_key = CredentialManager.get_gemini_key()
+        self.openai_key = CredentialManager.get_openai_key()
+        self.openrouter_key = CredentialManager.get_openrouter_key()
         self._init_clients()
         self._discover_models()
         return self.get_models_list()
@@ -395,7 +288,7 @@ class LLMService:
                 if model_entry["id"] == preferred_model:
                     preferred_entry = models_to_try.pop(i)
                     break
-            
+
             if preferred_entry:
                 models_to_try.insert(0, preferred_entry)
                 print(f"[Info] Using preferred model: {preferred_model}")
@@ -462,7 +355,7 @@ class LLMService:
         """
         if not self.available_models:
             return {}
-        
+
         # Reorder models to try preferred_model first if specified
         models_to_try = self.available_models.copy()
         if preferred_model:
@@ -472,7 +365,7 @@ class LLMService:
                 if model_entry["id"] == preferred_model:
                     preferred_entry = models_to_try.pop(i)
                     break
-            
+
             if preferred_entry:
                 models_to_try.insert(0, preferred_entry)
                 print(f"[Info] Using preferred model for batch: {preferred_model}")
@@ -546,23 +439,18 @@ class LLMService:
                     completion = self.openrouter_client.chat.completions.create(
                         model=model_id,
                         messages=[
-                            {"role": "user", "content": full_prompt}, 
-                        ]
+                            {"role": "user", "content": full_prompt},
+                        ],
                     )
                     content = completion.choices[0].message.content
                     raw_text = content if content else ""
 
                 # Parse JSON
-                # Clean up markdown if present
-                clean_text = raw_text.strip()
-                if clean_text.startswith("```json"):
-                    clean_text = clean_text[7:]
-                if clean_text.startswith("```"):
-                    clean_text = clean_text[3:]
-                if clean_text.endswith("```"):
-                    clean_text = clean_text[:-3]
-
-                parsed_data = json.loads(clean_text)
+                try:
+                    parsed_data = _extract_json(raw_text)
+                except json.JSONDecodeError:
+                    print(f"  -> JSON parse failed for {model_id} output.")
+                    continue
 
                 # OpenAI json_object mode might wrap it?
                 # If prompt asked for list, valid JSON is [].
@@ -615,20 +503,8 @@ class LLMService:
             # Load SSL config and use it
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
-            
-            # Set global ENVs for consistency (only if using certificate bundle)
-            # If using SSL context (CERT_NONE), don't set env vars as they might interfere
-            if isinstance(verify_option, str) and os.path.exists(verify_option):
-                os.environ["SSL_CERT_FILE"] = verify_option
-                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
-            elif isinstance(verify_option, ssl.SSLContext):
-                # When SSL is disabled, clear env vars that might point to failing bundles
-                # This ensures the SSL context is used instead of env vars
-                if "SSL_CERT_FILE" in os.environ:
-                    del os.environ["SSL_CERT_FILE"]
-                if "REQUESTS_CA_BUNDLE" in os.environ:
-                    del os.environ["REQUESTS_CA_BUNDLE"]
-            
+            setup_ssl_environment(verify_option)
+
             client = genai.Client(
                 api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
             )
@@ -659,19 +535,20 @@ class LLMService:
         try:
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
+            setup_ssl_environment(verify_option)
+
             OR_BASE_URL = "https://openrouter.ai/api/v1"
-            
+
             if isinstance(verify_option, str) and os.path.exists(verify_option):
-                os.environ["SSL_CERT_FILE"] = verify_option
-                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
             elif isinstance(verify_option, ssl.SSLContext):
-                 import httpx
-                 httpx_client = httpx.Client(verify=verify_option)
-                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key, http_client=httpx_client)
+                import httpx
+
+                httpx_client = httpx.Client(verify=verify_option)
+                client = OpenAI(base_url=OR_BASE_URL, api_key=api_key, http_client=httpx_client)
             else:
-                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
-            
+                client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
+
             # Lightweight call
             client.models.list()
             return True, "Connection Successful!"
@@ -693,20 +570,20 @@ class LLMService:
             # For CERT_NONE, we need to use custom httpx client
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
-            
+            setup_ssl_environment(verify_option)
+
             # Set env vars if using certificate bundle
             if isinstance(verify_option, str) and os.path.exists(verify_option):
-                os.environ["SSL_CERT_FILE"] = verify_option
-                os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                 client = OpenAI(api_key=api_key)
             elif isinstance(verify_option, ssl.SSLContext):
                 # For CERT_NONE, we need custom httpx client
                 import httpx
+
                 httpx_client = httpx.Client(verify=verify_option)
                 client = OpenAI(api_key=api_key, http_client=httpx_client)
             else:
                 client = OpenAI(api_key=api_key)
-            
+
             # Lightweight call to list models
             client.models.list()
             return True, "Connection Successful!"

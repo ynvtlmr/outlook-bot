@@ -1,9 +1,9 @@
 import os
 import sys
 import threading
+from typing import Callable
 
 import customtkinter as ctk
-from tkinter import filedialog
 import dotenv
 import yaml
 
@@ -11,7 +11,17 @@ import llm
 
 # Import main script logic
 import main
-from config import CONFIG_PATH, DAYS_THRESHOLD, DEFAULT_REPLY, ENV_PATH, SYSTEM_PROMPT_PATH
+from config import (
+    CONFIG_PATH,
+    DAYS_THRESHOLD,
+    DEFAULT_REPLY,
+    ENV_GEMINI_API_KEY,
+    ENV_OPENAI_API_KEY,
+    ENV_OPENROUTER_API_KEY,
+    ENV_PATH,
+    SYSTEM_PROMPT_PATH,
+    CredentialManager,
+)
 from date_utils import get_current_date_context
 
 # --- Configuration & Constants ---
@@ -145,7 +155,7 @@ class OutlookBotGUI(ctk.CTk):
         lbl_or.grid(row=2, column=0, padx=10, pady=10, sticky="w")
         self.entry_or_key = ctk.CTkEntry(tab, width=400, show="*")
         self.entry_or_key.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
-        
+
         # Toggle visibility (OpenRouter)
         self.chk_show_or = ctk.CTkCheckBox(tab, text="Show", command=self.toggle_or_visibility, width=60)
         self.chk_show_or.grid(row=2, column=2, padx=10, pady=10)
@@ -160,10 +170,6 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days = ctk.CTkEntry(tab, width=100)
         self.entry_days.grid(row=3, column=1, padx=10, pady=10, sticky="w")
 
-
-
-
-
         # Default Reply
         lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
         lbl_reply.grid(row=4, column=0, padx=10, pady=10, sticky="nw")
@@ -177,7 +183,7 @@ class OutlookBotGUI(ctk.CTk):
         self.combo_provider.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
         self.combo_provider.set("All")
         self.combo_provider.configure(values=["All", "Gemini", "OpenAI", "OpenRouter"])
-        
+
         # Search Entry
         self.entry_search = ctk.CTkEntry(tab, placeholder_text="Search models...")
         self.entry_search.grid(row=5, column=2, padx=10, pady=10, sticky="ew")
@@ -192,7 +198,7 @@ class OutlookBotGUI(ctk.CTk):
         # Refresh Models Button
         self.btn_refresh_models = ctk.CTkButton(tab, text="Refresh Models", command=self.refresh_models_list)
         self.btn_refresh_models.grid(row=6, column=2, padx=10, pady=10, sticky="nw")
-        
+
         # Store available models list for dropdown (list of dicts from llm service: {'id':..., 'provider':...})
         self.available_models_data = []
 
@@ -211,23 +217,18 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_prompt = ctk.CTkTextbox(tab, wrap="word")
         self.txt_prompt.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
-    def toggle_key_visibility(self):
-        if self.chk_show_key.get():
-            self.entry_api_key.configure(show="")
-        else:
-            self.entry_api_key.configure(show="*")
+    def _toggle_visibility(self, checkbox: ctk.CTkCheckBox, entry: ctk.CTkEntry) -> None:
+        """Toggle password visibility for an entry field based on checkbox state."""
+        entry.configure(show="" if checkbox.get() else "*")
 
-    def toggle_openai_visibility(self):
-        if self.chk_show_openai.get():
-            self.entry_openai_key.configure(show="")
-        else:
-            self.entry_openai_key.configure(show="*")
+    def toggle_key_visibility(self) -> None:
+        self._toggle_visibility(self.chk_show_key, self.entry_api_key)
 
-    def toggle_or_visibility(self):
-        if self.chk_show_or.get():
-            self.entry_or_key.configure(show="")
-        else:
-            self.entry_or_key.configure(show="*")
+    def toggle_openai_visibility(self) -> None:
+        self._toggle_visibility(self.chk_show_openai, self.entry_openai_key)
+
+    def toggle_or_visibility(self) -> None:
+        self._toggle_visibility(self.chk_show_or, self.entry_or_key)
 
     def log(self, message):
         self.log_box.configure(state="normal")
@@ -251,31 +252,25 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days.delete(0, "end")
         self.entry_days.insert(0, str(data.get("days_threshold", DAYS_THRESHOLD)))
 
-
-
-
-
         # Default Reply
         self.txt_default_reply.delete("0.0", "end")
         self.txt_default_reply.insert("0.0", data.get("default_reply", DEFAULT_REPLY))
 
-        # Models (Handled by refresh_models_list)
-        # We don't load 'available_models' from yaml anymore as it's dynamic
-        pass
+        # Note: Models are loaded dynamically by refresh_models_list()
 
         # 2. Load .env
         try:
             if os.path.exists(ENV_PATH):
                 dotenv.load_dotenv(ENV_PATH, override=True)
-                api_key = os.getenv("GEMINI_API_KEY", "")
+                api_key = CredentialManager.get_gemini_key() or ""
                 self.entry_api_key.delete(0, "end")
                 self.entry_api_key.insert(0, api_key)
 
-                openai_key = os.getenv("OPENAI_API_KEY", "")
+                openai_key = CredentialManager.get_openai_key() or ""
                 self.entry_openai_key.delete(0, "end")
                 self.entry_openai_key.insert(0, openai_key)
 
-                or_key = os.getenv("OPENROUTER_API_KEY", "")
+                or_key = CredentialManager.get_openrouter_key() or ""
                 self.entry_or_key.delete(0, "end")
                 self.entry_or_key.insert(0, or_key)
         except OSError as e:
@@ -285,7 +280,7 @@ class OutlookBotGUI(ctk.CTk):
         preferred_model = data.get("preferred_model", "")
         # We'll set this 'preferred_model' as a temporary attribute so refresh_models_list can pick it up
         self._initial_preferred_model = preferred_model
-        
+
         # 4. Detect Models (Use the service)
         # We delay this slightly or run it now if we have keys
         self.refresh_models_list(use_initial_pref=True)
@@ -321,20 +316,16 @@ class OutlookBotGUI(ctk.CTk):
                         existing_data = yaml.safe_load(f) or {}
                 except Exception:
                     pass  # If read fails, start fresh
-            
+
             days = int(self.entry_days.get())
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
             preferred_model = self.combo_model.get()
-            
+
             # Update only the fields we manage, preserve others
             data = existing_data.copy()
-            data.update({
-                "days_threshold": days,
-                "default_reply": default_reply,
-                "preferred_model": preferred_model
-            })
+            data.update({"days_threshold": days, "default_reply": default_reply, "preferred_model": preferred_model})
             # Note: disable_ssl_verify is now hardcoded in llm.py and not stored in config.yaml
-            
+
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(data, f)
         except ValueError:
@@ -349,16 +340,16 @@ class OutlookBotGUI(ctk.CTk):
             new_key = self.entry_api_key.get().strip()
 
             # Use dotenv.set_key to preserve other vars if any
-            dotenv.set_key(ENV_PATH, "GEMINI_API_KEY", new_key)
-            os.environ["GEMINI_API_KEY"] = new_key
+            dotenv.set_key(ENV_PATH, ENV_GEMINI_API_KEY, new_key)
+            os.environ[ENV_GEMINI_API_KEY] = new_key
 
             new_openai_key = self.entry_openai_key.get().strip()
-            dotenv.set_key(ENV_PATH, "OPENAI_API_KEY", new_openai_key)
-            os.environ["OPENAI_API_KEY"] = new_openai_key
+            dotenv.set_key(ENV_PATH, ENV_OPENAI_API_KEY, new_openai_key)
+            os.environ[ENV_OPENAI_API_KEY] = new_openai_key
 
             new_or_key = self.entry_or_key.get().strip()
-            dotenv.set_key(ENV_PATH, "OPENROUTER_API_KEY", new_or_key)
-            os.environ["OPENROUTER_API_KEY"] = new_or_key
+            dotenv.set_key(ENV_PATH, ENV_OPENROUTER_API_KEY, new_or_key)
+            os.environ[ENV_OPENROUTER_API_KEY] = new_or_key
         except OSError as e:
             self.log(f"[Error] Failed to save .env: {e}\n")
             success = False
@@ -440,41 +431,42 @@ class OutlookBotGUI(ctk.CTk):
         self.log("[Info] Detecting available models...\n")
         try:
             # Explicitly set ENV from UI before detecting.
-            os.environ["GEMINI_API_KEY"] = self.entry_api_key.get().strip()
-            os.environ["OPENAI_API_KEY"] = self.entry_openai_key.get().strip()
-            os.environ["OPENROUTER_API_KEY"] = self.entry_or_key.get().strip()
+            os.environ[ENV_GEMINI_API_KEY] = self.entry_api_key.get().strip()
+            os.environ[ENV_OPENAI_API_KEY] = self.entry_openai_key.get().strip()
+            os.environ[ENV_OPENROUTER_API_KEY] = self.entry_or_key.get().strip()
 
             service = llm.LLMService()
             # ACCESS RAW DATA instead of list strings, so we know provider
-            models_data = service.available_models # list of {'id':..., 'provider':...}
-            
+            models_data = service.available_models  # list of {'id':..., 'provider':...}
+
             # Store full model data
-            self.available_models_data = models_data # store list of dicts
+            self.available_models_data = models_data  # store list of dicts
 
             if not models_data:
-                 self.log(f"[Warning] No models detected. Please check API keys.\n")
-                 self.combo_model.configure(values=["No models available"])
-                 self.combo_model.set("No models available")
-                 return
+                self.log("[Warning] No models detected. Please check API keys.\n")
+                self.combo_model.configure(values=["No models available"])
+                self.combo_model.set("No models available")
+                return
 
             self.log(f"[Info] Found {len(models_data)} models total.\n")
-            
+
             # Decide on preferred model
             pref = None
-            if use_initial_pref and hasattr(self, '_initial_preferred_model'):
+            if use_initial_pref and hasattr(self, "_initial_preferred_model"):
                 pref = self._initial_preferred_model
-            
+
             # Determine which provider contains this preferred model to set correct filter
-            # Logic removed: User prefers "All" to be default always.
-            # if pref:
-            #      # Find provider for this model
-            #      found_prov = next((m["provider"] for m in models_data if m["id"] == pref), None)
-            #      if found_prov:
-            #          # Map 'gemini' -> 'Gemini', 'openai' -> 'OpenAI'
-            #          display_prov = "Gemini" if found_prov == "gemini" else ("OpenAI" if found_prov == "openai" else "All")
-            #          self.combo_provider.set(display_prov)
-            #      else:
-            #          pass
+            if pref:
+                # Find provider for this model
+                found_model = next((m for m in models_data if m["id"] == pref), None)
+                if found_model:
+                    found_prov = found_model.get("provider", "").lower()
+
+                    # Map internal provider id to Dropdown display string
+                    provider_map = {"gemini": "Gemini", "openai": "OpenAI", "openrouter": "OpenRouter"}
+
+                    display_prov = provider_map.get(found_prov, "All")
+                    self.combo_provider.set(display_prov)
 
             # Update dropdown based on current provider/preferred selection
             self.update_model_dropdown(preferred_model=pref)
@@ -482,29 +474,30 @@ class OutlookBotGUI(ctk.CTk):
         except Exception as e:
             self.log(f"[Error] Failed to detect models: {e}\n")
             import traceback
+
             traceback.print_exc()
             self.combo_model.configure(values=["Error loading models"])
             self.combo_model.set("Error loading models")
-    
+
     def on_provider_change(self, choice):
         """Called when user selects a provider filter."""
         self.log(f"[Info] Provider filter changed to: {choice}\n")
         self.update_model_dropdown()
-        
+
     def on_search_change(self, event=None):
         """Called when user types in search box."""
         self.update_model_dropdown()
 
     def update_model_dropdown(self, preferred_model=None):
         """Filters available_models_data based on combo_provider AND search text, then updates combo_model."""
-        provider_filter = self.combo_provider.get() # "All", "Gemini", "OpenAI"
+        provider_filter = self.combo_provider.get()  # "All", "Gemini", "OpenAI"
         search_text = self.entry_search.get().lower().strip()
-        
+
         filtered_ids = []
         for m in self.available_models_data:
             p = m.get("provider", "").lower()
             mid = m.get("id", "")
-            
+
             # Filter by Provider
             if provider_filter != "All":
                 if provider_filter == "Gemini" and p != "gemini":
@@ -513,23 +506,23 @@ class OutlookBotGUI(ctk.CTk):
                     continue
                 if provider_filter == "OpenRouter" and p != "openrouter":
                     continue
-            
+
             # Filter by Search Text
             if search_text and search_text not in mid.lower():
                 continue
-                
+
             filtered_ids.append(mid)
-        
+
         if not filtered_ids:
             self.combo_model.configure(values=["No matching models"])
             self.combo_model.set("No matching models")
             return
 
         self.combo_model.configure(values=filtered_ids)
-        
+
         # Try to keep current selection if valid
         current = self.combo_model.get()
-        
+
         # If specific preferred_model requested (e.g. from load), try that
         if preferred_model and preferred_model in filtered_ids:
             self.combo_model.set(preferred_model)
@@ -539,9 +532,8 @@ class OutlookBotGUI(ctk.CTk):
         else:
             # Default to first
             self.combo_model.set(filtered_ids[0])
-            
-        # self.log(f"[Debug] Showing {len(filtered_ids)} models for {provider_filter}\n")
 
+        # self.log(f"[Debug] Showing {len(filtered_ids)} models for {provider_filter}\n")
 
     def on_model_selected(self, choice):
         """Called when user selects a model from the dropdown."""
@@ -552,42 +544,36 @@ class OutlookBotGUI(ctk.CTk):
             self.stop_bot()
         self.destroy()
 
-    def test_gemini(self):
-        key = self.entry_api_key.get().strip()
-        self.log("[Info] Testing Gemini connection...\n")
-        self.btn_test_gemini.configure(text="...", state="disabled")
+    def _test_connection(self, provider: str, key: str, button: ctk.CTkButton, test_fn: Callable) -> None:
+        """Generic connection test handler for any provider."""
+        self.log(f"[Info] Testing {provider} connection...\n")
+        button.configure(text="...", state="disabled")
 
         def _target():
-            success, msg = llm.LLMService.test_gemini_connection(key)
-            # Update UI on main thread
-            self.after(0, lambda: self._handle_test_result(self.btn_test_gemini, success, msg))
+            success, msg = test_fn(key)
+            self.after(0, lambda: self._handle_test_result(button, success, msg))
 
         threading.Thread(target=_target, daemon=True).start()
 
-    def test_openai(self):
-        key = self.entry_openai_key.get().strip()
-        self.log("[Info] Testing OpenAI connection...\n")
-        self.btn_test_openai.configure(text="...", state="disabled")
+    def test_gemini(self) -> None:
+        """Test Gemini API connectivity using the entered API key."""
+        self._test_connection(
+            "Gemini", self.entry_api_key.get().strip(), self.btn_test_gemini, llm.LLMService.test_gemini_connection
+        )
 
-        def _target():
-            success, msg = llm.LLMService.test_openai_connection(key)
-            # Update UI on main thread
-            self.after(0, lambda: self._handle_test_result(self.btn_test_openai, success, msg))
+    def test_openai(self) -> None:
+        """Test OpenAI API connectivity using the entered API key."""
+        self._test_connection(
+            "OpenAI", self.entry_openai_key.get().strip(), self.btn_test_openai, llm.LLMService.test_openai_connection
+        )
 
-        threading.Thread(target=_target, daemon=True).start()
+    def test_or(self) -> None:
+        """Test OpenRouter API connectivity using the entered API key."""
+        self._test_connection(
+            "OpenRouter", self.entry_or_key.get().strip(), self.btn_test_or, llm.LLMService.test_openrouter_connection
+        )
 
-    def test_or(self):
-        key = self.entry_or_key.get().strip()
-        self.log("[Info] Testing OpenRouter connection...\n")
-        self.btn_test_or.configure(text="...", state="disabled")
-
-        def _target():
-            success, msg = llm.LLMService.test_openrouter_connection(key)
-            self.after(0, lambda: self._handle_test_result(self.btn_test_or, success, msg))
-        
-        threading.Thread(target=_target, daemon=True).start()
-
-    def _handle_test_result(self, button, success, message):
+    def _handle_test_result(self, button: ctk.CTkButton, success: bool, message: str) -> None:
         button.configure(text="Test", state="normal")
         if success:
             button.configure(fg_color="green", hover_color="darkgreen")
@@ -595,8 +581,6 @@ class OutlookBotGUI(ctk.CTk):
         else:
             button.configure(fg_color="darkred", hover_color="#800000")
             self.log(f"[Error] {message}\n")
-
-
 
 
 if __name__ == "__main__":

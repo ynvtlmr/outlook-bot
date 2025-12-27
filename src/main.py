@@ -1,31 +1,31 @@
 import html
 import traceback
 from datetime import datetime
+from typing import Any
 
 import llm
-from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, SYSTEM_PROMPT_PATH, PREFERRED_MODEL
-
-from date_utils import get_latest_date, get_current_date_context
+from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, PREFERRED_MODEL, SYSTEM_PROMPT_PATH
+from date_utils import get_current_date_context, get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
 
 
-def print_separator(char="-", length=30):
+def print_separator(char: str = "-", length: int = 30) -> None:
     print(char * length)
 
 
-def check_outlook_status():
+def check_outlook_status() -> bool:
     """Detects if Outlook is running and returns version."""
     version = get_outlook_version()
     if version:
         print(f"Target Client: Microsoft Outlook {version}")
         return True
     else:
-        print("Warning: Could not detect Outlook version. Is it running?")
+        print("Warning: Could not detect Outlook version. Please ensure Microsoft Outlook is running.")
         return False
 
 
-def load_system_prompt():
+def load_system_prompt() -> str:
     """Loads text from system_prompt.txt or returns default."""
     try:
         with open(SYSTEM_PROMPT_PATH, "r") as f:
@@ -35,7 +35,7 @@ def load_system_prompt():
         return "You are a helpful assistant."
 
 
-def filter_threads_for_replies(threads):
+def filter_threads_for_replies(threads: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
     """
     Identifies threads that need a reply based on flag status and activity date.
     Returns a list of dicts: {'thread': thread, 'target_msg': msg, 'subject': subject}
@@ -89,7 +89,12 @@ def filter_threads_for_replies(threads):
     return candidates
 
 
-def process_replies(candidates, client, system_prompt, llm_service):
+def process_replies(
+    candidates: list[dict[str, Any]],
+    client: OutlookClient,
+    system_prompt: str,
+    llm_service: llm.LLMService,
+) -> None:
     """
     Generates replies for candidates and creates drafts.
     """
@@ -128,7 +133,7 @@ def process_replies(candidates, client, system_prompt, llm_service):
             print(f"  -> Warning: No reply generated for '{subject}' (ID: {msg_id})")
 
 
-def create_draft_reply(client, msg_id, subject, reply_text):
+def create_draft_reply(client: OutlookClient, msg_id: str, subject: str, reply_text: str) -> None:
     """Creates the actual draft in Outlook."""
     print(f"\nCreating draft for: {subject}")
     print("#" * 30)
@@ -146,7 +151,7 @@ def create_draft_reply(client, msg_id, subject, reply_text):
         print(f"  -> Failed to create draft: {e}")
 
 
-def main():
+def main() -> None:
     print("--- Outlook Bot Generic Scraper ---")
 
     if not check_outlook_status():
@@ -171,7 +176,7 @@ def main():
         base_system_prompt = load_system_prompt()
         date_context = get_current_date_context()
         combined_system_prompt = f"{date_context}\n\n{base_system_prompt}"
-        
+
         print(f"System Prompt Context: {date_context}")
 
         # Initialize LLM Service (Detects models)
