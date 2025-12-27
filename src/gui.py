@@ -155,18 +155,31 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
         self.txt_default_reply.grid(row=4, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
 
+        # Model Provider Selection
+        lbl_provider = ctk.CTkLabel(tab, text="Model Provider:")
+        lbl_provider.grid(row=5, column=0, padx=10, pady=10, sticky="nw")
+        self.combo_provider = ctk.CTkComboBox(tab, state="readonly", command=self.on_provider_change)
+        self.combo_provider.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
+        self.combo_provider.set("All")
+        self.combo_provider.configure(values=["All", "Gemini", "OpenAI"])
+        
+        # Search Entry
+        self.entry_search = ctk.CTkEntry(tab, placeholder_text="Search models...")
+        self.entry_search.grid(row=5, column=2, padx=10, pady=10, sticky="ew")
+        self.entry_search.bind("<KeyRelease>", self.on_search_change)
+
         # Model Selection
         lbl_model = ctk.CTkLabel(tab, text="Preferred Model:")
-        lbl_model.grid(row=5, column=0, padx=10, pady=10, sticky="nw")
+        lbl_model.grid(row=6, column=0, padx=10, pady=10, sticky="nw")
         self.combo_model = ctk.CTkComboBox(tab, state="readonly", command=self.on_model_selected)
-        self.combo_model.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
+        self.combo_model.grid(row=6, column=1, padx=10, pady=10, sticky="ew")
 
         # Refresh Models Button
         self.btn_refresh_models = ctk.CTkButton(tab, text="Refresh Models", command=self.refresh_models_list)
-        self.btn_refresh_models.grid(row=5, column=2, padx=10, pady=10, sticky="nw")
+        self.btn_refresh_models.grid(row=6, column=2, padx=10, pady=10, sticky="nw")
         
-        # Store available models list for dropdown
-        self.available_models_list = []
+        # Store available models list for dropdown (list of dicts from llm service: {'id':..., 'provider':...})
+        self.available_models_data = []
 
     def setup_prompt_tab(self):
         tab = self.tab_view.tab("System Prompt")
@@ -238,13 +251,12 @@ class OutlookBotGUI(ctk.CTk):
 
         # 3. Load Preferred Model
         preferred_model = data.get("preferred_model", "")
-        if preferred_model:
-            # Will be set after models are loaded
-            pass
+        # We'll set this 'preferred_model' as a temporary attribute so refresh_models_list can pick it up
+        self._initial_preferred_model = preferred_model
         
         # 4. Detect Models (Use the service)
         # We delay this slightly or run it now if we have keys
-        self.refresh_models_list(preferred_model)
+        self.refresh_models_list(use_initial_pref=True)
 
         # 5. Load System Prompt
         try:
@@ -386,42 +398,110 @@ class OutlookBotGUI(ctk.CTk):
             # config.should_stop = True (if we implemented that)
             pass
 
-    def refresh_models_list(self, preferred_model=None):
+    def refresh_models_list(self, use_initial_pref=False):
         self.log("[Info] Detecting available models...\n")
         try:
-            # Re-read keys from entry (in case user typed but didn't save yet,
-            # though LLMService reads from env. So we must ensure ENV is set)
-            # For detection to work with Unsaved keys, we must set them momentarily or just save them.
-            # Let's just rely on what's in ENV.
-            # If user types key, they must Save?
-            # Let's explicitly set ENV from UI before detecting.
+            # Explicitly set ENV from UI before detecting.
             os.environ["GEMINI_API_KEY"] = self.entry_api_key.get().strip()
             os.environ["OPENAI_API_KEY"] = self.entry_openai_key.get().strip()
 
             service = llm.LLMService()
-            models = service.get_models_list()
+            # ACCESS RAW DATA instead of list strings, so we know provider
+            models_data = service.available_models # list of {'id':..., 'provider':...}
             
-            # Store models list
-            self.available_models_list = models
+            # Store full model data
+            self.available_models_data = models_data # store list of dicts
 
-            # Update dropdown
-            if models:
-                self.combo_model.configure(values=models)
-                # Set preferred model if provided, otherwise use first model
-                if preferred_model and preferred_model in models:
-                    self.combo_model.set(preferred_model)
-                else:
-                    self.combo_model.set(models[0])
-                self.log(f"[Info] Found {len(models)} models. Selected: {self.combo_model.get()}\n")
-            else:
-                self.combo_model.configure(values=["No models available"])
-                self.combo_model.set("No models available")
-                self.log(f"[Warning] No models detected. Please check API keys.\n")
+            if not models_data:
+                 self.log(f"[Warning] No models detected. Please check API keys.\n")
+                 self.combo_model.configure(values=["No models available"])
+                 self.combo_model.set("No models available")
+                 return
+
+            self.log(f"[Info] Found {len(models_data)} models total.\n")
+            
+            # Decide on preferred model
+            pref = None
+            if use_initial_pref and hasattr(self, '_initial_preferred_model'):
+                pref = self._initial_preferred_model
+            
+            # Determine which provider contains this preferred model to set correct filter
+            if pref:
+                 # Find provider for this model
+                 found_prov = next((m["provider"] for m in models_data if m["id"] == pref), None)
+                 if found_prov:
+                     # Map 'gemini' -> 'Gemini', 'openai' -> 'OpenAI'
+                     display_prov = "Gemini" if found_prov == "gemini" else ("OpenAI" if found_prov == "openai" else "All")
+                     self.combo_provider.set(display_prov)
+                 else:
+                     # Model not found in list? Maybe switched to 'All'
+                     pass
+
+            # Update dropdown based on current provider/preferred selection
+            self.update_model_dropdown(preferred_model=pref)
+
         except Exception as e:
             self.log(f"[Error] Failed to detect models: {e}\n")
+            import traceback
+            traceback.print_exc()
             self.combo_model.configure(values=["Error loading models"])
             self.combo_model.set("Error loading models")
     
+    def on_provider_change(self, choice):
+        """Called when user selects a provider filter."""
+        self.log(f"[Info] Provider filter changed to: {choice}\n")
+        self.update_model_dropdown()
+        
+    def on_search_change(self, event=None):
+        """Called when user types in search box."""
+        self.update_model_dropdown()
+
+    def update_model_dropdown(self, preferred_model=None):
+        """Filters available_models_data based on combo_provider AND search text, then updates combo_model."""
+        provider_filter = self.combo_provider.get() # "All", "Gemini", "OpenAI"
+        search_text = self.entry_search.get().lower().strip()
+        
+        filtered_ids = []
+        for m in self.available_models_data:
+            p = m.get("provider", "").lower()
+            mid = m.get("id", "")
+            
+            # Filter by Provider
+            if provider_filter != "All":
+                if provider_filter == "Gemini" and p != "gemini":
+                    continue
+                if provider_filter == "OpenAI" and p != "openai":
+                    continue
+            
+            # Filter by Search Text
+            if search_text and search_text not in mid.lower():
+                continue
+                
+            filtered_ids.append(mid)
+        
+        if not filtered_ids:
+            self.combo_model.configure(values=["No matching models"])
+            self.combo_model.set("No matching models")
+            return
+
+        self.combo_model.configure(values=filtered_ids)
+        
+        # Try to keep current selection if valid
+        current = self.combo_model.get()
+        
+        # If specific preferred_model requested (e.g. from load), try that
+        if preferred_model and preferred_model in filtered_ids:
+            self.combo_model.set(preferred_model)
+        elif current in filtered_ids:
+            # Keep current
+            self.combo_model.set(current)
+        else:
+            # Default to first
+            self.combo_model.set(filtered_ids[0])
+            
+        # self.log(f"[Debug] Showing {len(filtered_ids)} models for {provider_filter}\n")
+
+
     def on_model_selected(self, choice):
         """Called when user selects a model from the dropdown."""
         self.log(f"[Info] Model selection changed to: {choice}\n")
