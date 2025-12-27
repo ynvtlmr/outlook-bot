@@ -1,22 +1,25 @@
-import sys
 import os
+import sys
+
 import yaml
 
 # Adjust path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
+from config import APPLESCRIPTS_DIR, CONFIG_PATH, OUTPUT_DIR
 from outlook_client import get_outlook_version
-from config import CONFIG_PATH, OUTPUT_DIR, APPLESCRIPTS_DIR
+
 
 def log(test_name, status, details=""):
     print(f"[{status}] {test_name}")
     if details:
         print(f"      Details: {details}")
 
+
 def test_environment():
-    print("="*60)
+    print("=" * 60)
     print("ENVIRONMENT & CONFIG DIAGNOSTICS")
-    print("="*60)
+    print("=" * 60)
 
     # TEST 1: Outlook Detection
     test_name = "Outlook Detection"
@@ -33,7 +36,7 @@ def test_environment():
     test_name = "Config Check"
     if os.path.exists(CONFIG_PATH):
         try:
-            with open(CONFIG_PATH, 'r') as f:
+            with open(CONFIG_PATH, "r") as f:
                 data = yaml.safe_load(f)
             if isinstance(data, dict):
                 log(test_name, "PASS", "config.yaml is valid.")
@@ -49,7 +52,7 @@ def test_environment():
     try:
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)
-        
+
         test_file = os.path.join(OUTPUT_DIR, "write_test.tmp")
         with open(test_file, "w") as f:
             f.write("test")
@@ -65,13 +68,14 @@ def test_environment():
     for s in required_scripts:
         if not os.path.exists(os.path.join(APPLESCRIPTS_DIR, s)):
             missing.append(s)
-            
+
     if not missing:
         log(test_name, "PASS", "All core AppleScripts found.")
     else:
         log(test_name, "FAIL", f"Missing scripts: {missing}")
 
-    print("="*60)
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     test_environment()

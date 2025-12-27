@@ -1,25 +1,26 @@
-import sys
-import ssl
 import os
-import urllib.request
+import ssl
+import sys
 import urllib.error
-import socket
+import urllib.request
+
 
 def log(msg):
     print(f"[LOG] {msg}")
 
+
 def run_diagnostics():
-    print("="*60)
+    print("=" * 60)
     print("SSL DIAGNOSTICS FOR OUTLOOK BOT")
-    print("="*60)
+    print("=" * 60)
 
     # --- TEST 1: Environment Inspection ---
     print("\n--- TEST 1: Environment Inspection ---")
     log(f"Python Executable: {sys.executable}")
     log(f"Python Version: {sys.version}")
-    
+
     # Check for SSL-related environment variables
-    ssl_vars = {k: v for k, v in os.environ.items() if 'SSL' in k or 'CERT' in k}
+    ssl_vars = {k: v for k, v in os.environ.items() if "SSL" in k or "CERT" in k}
     if ssl_vars:
         log("Found SSL/CERT environment variables:")
         for k, v in ssl_vars.items():
@@ -37,13 +38,13 @@ def run_diagnostics():
         log(f"openssl_cafile: {paths.openssl_cafile}")
         log(f"openssl_capath_env: {paths.openssl_capath_env}")
         log(f"openssl_capath: {paths.openssl_capath}")
-        
+
         # Check if cafile actually exists
         if paths.cafile and os.path.exists(paths.cafile):
             log(f"SUCCESS: Default cafile exists at {paths.cafile}")
         else:
             log(f"WARNING: Default cafile does not exist at {paths.cafile}")
-            
+
     except Exception as e:
         log(f"Error getting verify paths: {e}")
 
@@ -52,6 +53,7 @@ def run_diagnostics():
     certifi_path = None
     try:
         import certifi
+
         certifi_path = certifi.where()
         log(f"Certifi is installed. Path: {certifi_path}")
         if os.path.exists(certifi_path):
@@ -70,7 +72,7 @@ def run_diagnostics():
         with urllib.request.urlopen(target_url, timeout=5) as response:
             log(f"SUCCESS: Connection established. Status: {response.status}")
     except urllib.error.HTTPError as e:
-        log(f"SUCCESS: SSL Handshake worked! (Server returned {e.code}, which is expected for this URL without parameters)")
+        log(f"SUCCESS: SSL Handshake worked! (Server returned {e.code}, expected for this URL)")
     except urllib.error.URLError as e:
         log(f"FAILURE: URL Error: {e.reason}")
     except Exception as e:
@@ -92,10 +94,11 @@ def run_diagnostics():
             log(f"FAILURE: Exception with Certifi: {e}")
     else:
         log("SKIP: Certifi not available to test.")
-        
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("END DIAGNOSTICS")
-    print("="*60)
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     run_diagnostics()

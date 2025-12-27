@@ -77,6 +77,8 @@ def group_into_threads(messages: list[Message]) -> list[Thread]:
     threads_map: dict[str, Thread] = {}
     for msg in messages:
         t_id = msg.get("id")
+        if t_id is None:
+            continue
         if t_id not in threads_map:
             threads_map[t_id] = []
         threads_map[t_id].append(msg)
@@ -129,7 +131,7 @@ def scrape_messages(script_name: str, file_prefix: str = "thread") -> list[Threa
                 f.write(f"Subject: {msg.get('subject')}\n")
                 f.write(f"Flag Status: {msg.get('flag_status', 'None')}\n")
                 f.write("-" * 20 + "\n")
-                f.write(msg.get("content") + "\n")
+                f.write(msg.get("content", "") + "\n")
                 f.write("=" * 80 + "\n\n")
 
     print(f"Successfully saved {len(top_threads)} threads to {os.path.abspath(OUTPUT_DIR)}")

@@ -10,6 +10,31 @@ from openai import OpenAI
 
 from ssl_utils import get_ssl_verify_option
 
+# Model exclusion keywords for filtering out non-text/specialized models
+EXCLUDED_MODEL_KEYWORDS = [
+    "image",
+    "vision",
+    "audio",
+    "video",
+    "tts",
+    "speech",
+    "transcribe",
+    "whisper",
+    "dall-e",
+    "embedding",
+    "search",
+    "moderation",
+    "realtime",
+    "creation",
+    "edit",
+    "001",
+    "002",
+    "exp",
+    "codex",
+    "legacy",
+    "robotics",
+]
+
 
 def load_ssl_config_helper():
     """
@@ -19,8 +44,6 @@ def load_ssl_config_helper():
     """
     # Hardcoded to True - SSL verification must be disabled for Zscaler compatibility
     return True
-
-
 
 
 class LLMService:
@@ -41,14 +64,14 @@ class LLMService:
     def _init_clients(self):
         disable_ssl = load_ssl_config_helper()
         if disable_ssl:
-            print("[Security Warning] SSL Verification is DISABLED via config.yaml")
-        
+            print("[Security Warning] SSL Verification is DISABLED (hardcoded for Zscaler compatibility)")
+
         # Gemini
         if self.gemini_key:
             try:
                 # Use ssl_utils to get the best verify option (Path or SSL Context)
                 verify_option = get_ssl_verify_option(disable_ssl)
-                
+
                 # Global ENV Configuration for robustness (Fixes OpenAI and others)
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
                     print(f"[Info] Using merged certificate bundle: {verify_option}")
@@ -63,13 +86,10 @@ class LLMService:
                         del os.environ["SSL_CERT_FILE"]
                     if "REQUESTS_CA_BUNDLE" in os.environ:
                         del os.environ["REQUESTS_CA_BUNDLE"]
-                
-                self.gemini_client = genai.Client(
-                    api_key=self.gemini_key, 
-                    http_options=types.HttpOptions(client_args={"verify": verify_option})
-                )
-                
 
+                self.gemini_client = genai.Client(
+                    api_key=self.gemini_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
+                )
             except Exception as e:
                 print(f"Warning: Failed to initialize Gemini client: {e}")
 
@@ -78,7 +98,7 @@ class LLMService:
             try:
                 # Use the same SSL configuration approach as test_openai_connection
                 verify_option = get_ssl_verify_option(disable_ssl)
-                
+
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
                     # Use certificate bundle via environment variables
                     os.environ["SSL_CERT_FILE"] = verify_option
@@ -87,6 +107,7 @@ class LLMService:
                 elif isinstance(verify_option, ssl.SSLContext):
                     # For CERT_NONE, use custom httpx client
                     import httpx
+
                     httpx_client = httpx.Client(verify=verify_option)
                     self.openai_client = OpenAI(api_key=self.openai_key, http_client=httpx_client)
                 else:
@@ -101,7 +122,7 @@ class LLMService:
             try:
                 verify_option = get_ssl_verify_option(disable_ssl)
                 OR_BASE_URL = "https://openrouter.ai/api/v1"
-                
+
                 # Similar SSL handling for OpenRouter (via OpenAI SDK)
                 if isinstance(verify_option, str) and os.path.exists(verify_option):
                     # Globals likely already set if OpenAI init ran, but safe to set again or rely on them
@@ -110,11 +131,10 @@ class LLMService:
                     self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
                 elif isinstance(verify_option, ssl.SSLContext):
                     import httpx
+
                     httpx_client = httpx.Client(verify=verify_option)
                     self.openrouter_client = OpenAI(
-                        base_url=OR_BASE_URL,
-                        api_key=self.openrouter_key,
-                        http_client=httpx_client
+                        base_url=OR_BASE_URL, api_key=self.openrouter_key, http_client=httpx_client
                     )
                 else:
                     self.openrouter_client = OpenAI(base_url=OR_BASE_URL, api_key=self.openrouter_key)
@@ -132,31 +152,6 @@ class LLMService:
         self.available_models = []
         print("Detecting available LLM models...")
 
-        # Common exclusions for any provider
-        EXCLUDED_KEYWORDS = [
-            "image",
-            "vision",
-            "audio",
-            "video",
-            "tts",
-            "speech",
-            "transcribe",
-            "whisper",
-            "dall-e",
-            "embedding",
-            "search",
-            "moderation",
-            "realtime",
-            "creation",
-            "edit",
-            "001",
-            "002",
-            "exp",
-            "codex",
-            "legacy",
-            "robotics",
-        ]
-
         # 1. Gemini Discovery
         if self.gemini_client:
             try:
@@ -172,7 +167,7 @@ class LLMService:
                         continue
 
                     # 1. Aggressive Exclusion
-                    if any(k in lower_id for k in EXCLUDED_KEYWORDS):
+                    if any(k in lower_id for k in EXCLUDED_MODEL_KEYWORDS):
                         continue
 
                     # Exclude Experimental/Unstable
@@ -205,7 +200,7 @@ class LLMService:
                         continue
 
                     # Aggressive Exclusion
-                    if any(k in lower_id for k in EXCLUDED_KEYWORDS):
+                    if any(k in lower_id for k in EXCLUDED_MODEL_KEYWORDS):
                         continue
 
                     # Filter out specific date-based versions (e.g. -2024-07-18, -0125)
@@ -215,7 +210,7 @@ class LLMService:
                         continue
 
                     self.available_models.append({"id": mid, "provider": "openai"})
-                
+
                 if len(self.available_models) == 0:
                     print("  -> Warning: No OpenAI models passed filtering criteria")
                     print("  -> Consider checking filter rules if models are expected")
@@ -223,6 +218,7 @@ class LLMService:
             except Exception as e:
                 print(f"  -> OpenAI model discovery failed: {e}")
                 import traceback
+
                 print(f"  -> Traceback: {traceback.format_exc()}")
 
         # 3. OpenRouter Discovery
@@ -230,19 +226,19 @@ class LLMService:
             try:
                 print("  -> Querying OpenRouter for available models...")
                 models_page = self.openrouter_client.models.list()
-                
+
                 count = 0
                 for m in models_page.data:
                     mid = m.id
                     lower_id = mid.lower()
-                    
+
                     # Aggressive Exclusion
-                    if any(k in lower_id for k in EXCLUDED_KEYWORDS):
+                    if any(k in lower_id for k in EXCLUDED_MODEL_KEYWORDS):
                         continue
 
                     self.available_models.append({"id": mid, "provider": "openrouter"})
                     count += 1
-                
+
                 print(f"  -> Discovered {count} suitable OpenRouter models.")
 
             except Exception as e:
@@ -255,7 +251,6 @@ class LLMService:
                 f"  -> Discovered {len(self.available_models)} suitable models: "
                 + ", ".join([m["id"] for m in self.available_models])
             )
-
 
     def get_models_list(self):
         """Returns list of model names for display."""
@@ -290,7 +285,7 @@ class LLMService:
                 if model_entry["id"] == preferred_model:
                     preferred_entry = models_to_try.pop(i)
                     break
-            
+
             if preferred_entry:
                 models_to_try.insert(0, preferred_entry)
                 print(f"[Info] Using preferred model: {preferred_model}")
@@ -357,7 +352,7 @@ class LLMService:
         """
         if not self.available_models:
             return {}
-        
+
         # Reorder models to try preferred_model first if specified
         models_to_try = self.available_models.copy()
         if preferred_model:
@@ -367,7 +362,7 @@ class LLMService:
                 if model_entry["id"] == preferred_model:
                     preferred_entry = models_to_try.pop(i)
                     break
-            
+
             if preferred_entry:
                 models_to_try.insert(0, preferred_entry)
                 print(f"[Info] Using preferred model for batch: {preferred_model}")
@@ -441,8 +436,8 @@ class LLMService:
                     completion = self.openrouter_client.chat.completions.create(
                         model=model_id,
                         messages=[
-                            {"role": "user", "content": full_prompt}, 
-                        ]
+                            {"role": "user", "content": full_prompt},
+                        ],
                     )
                     content = completion.choices[0].message.content
                     raw_text = content if content else ""
@@ -510,7 +505,7 @@ class LLMService:
             # Load SSL config and use it
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
-            
+
             # Set global ENVs for consistency (only if using certificate bundle)
             # If using SSL context (CERT_NONE), don't set env vars as they might interfere
             if isinstance(verify_option, str) and os.path.exists(verify_option):
@@ -523,7 +518,7 @@ class LLMService:
                     del os.environ["SSL_CERT_FILE"]
                 if "REQUESTS_CA_BUNDLE" in os.environ:
                     del os.environ["REQUESTS_CA_BUNDLE"]
-            
+
             client = genai.Client(
                 api_key=api_key, http_options=types.HttpOptions(client_args={"verify": verify_option})
             )
@@ -555,18 +550,19 @@ class LLMService:
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
             OR_BASE_URL = "https://openrouter.ai/api/v1"
-            
+
             if isinstance(verify_option, str) and os.path.exists(verify_option):
                 os.environ["SSL_CERT_FILE"] = verify_option
                 os.environ["REQUESTS_CA_BUNDLE"] = verify_option
                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
             elif isinstance(verify_option, ssl.SSLContext):
-                 import httpx
-                 httpx_client = httpx.Client(verify=verify_option)
-                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key, http_client=httpx_client)
+                import httpx
+
+                httpx_client = httpx.Client(verify=verify_option)
+                client = OpenAI(base_url=OR_BASE_URL, api_key=api_key, http_client=httpx_client)
             else:
-                 client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
-            
+                client = OpenAI(base_url=OR_BASE_URL, api_key=api_key)
+
             # Lightweight call
             client.models.list()
             return True, "Connection Successful!"
@@ -588,7 +584,7 @@ class LLMService:
             # For CERT_NONE, we need to use custom httpx client
             disable_ssl = load_ssl_config_helper()
             verify_option = get_ssl_verify_option(disable_ssl)
-            
+
             # Set env vars if using certificate bundle
             if isinstance(verify_option, str) and os.path.exists(verify_option):
                 os.environ["SSL_CERT_FILE"] = verify_option
@@ -597,11 +593,12 @@ class LLMService:
             elif isinstance(verify_option, ssl.SSLContext):
                 # For CERT_NONE, we need custom httpx client
                 import httpx
+
                 httpx_client = httpx.Client(verify=verify_option)
                 client = OpenAI(api_key=api_key, http_client=httpx_client)
             else:
                 client = OpenAI(api_key=api_key)
-            
+
             # Lightweight call to list models
             client.models.list()
             return True, "Connection Successful!"

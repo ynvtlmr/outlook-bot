@@ -72,4 +72,3 @@ def get_current_date_context() -> str:
     """
     now = datetime.now()
     return now.strftime("Today is %A, %B %d, %Y.")
-

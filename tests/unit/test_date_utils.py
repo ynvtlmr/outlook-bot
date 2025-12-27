@@ -1,6 +1,7 @@
-import pytest
 from datetime import datetime
-from date_utils import parse_date_string, get_latest_date
+
+from date_utils import get_latest_date, parse_date_string
+
 
 def test_parse_date_string_formats():
     # Standard format
@@ -17,11 +18,13 @@ def test_parse_date_string_formats():
     # Garbage
     assert parse_date_string("Not a date") == datetime.min
 
+
 def test_parse_date_string_cleaning():
     # Non-breaking space \u202f
     raw = "Dec 18, 2025\u202fat 12:00 PM"
     d = parse_date_string(raw)
     assert d.year == 2025
+
 
 def test_get_latest_date():
     # Matches strict regex: "On Dec 5, 2025, at 12:00 PM"

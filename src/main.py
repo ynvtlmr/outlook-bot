@@ -170,7 +170,7 @@ def main():
         base_system_prompt = load_system_prompt()
         date_context = get_current_date_context()
         combined_system_prompt = f"{date_context}\n\n{base_system_prompt}"
-        
+
         print(f"System Prompt Context: {date_context}")
 
         # Initialize LLM Service (Detects models)

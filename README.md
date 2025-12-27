@@ -163,6 +163,21 @@ uv run ruff format .
 uv run ty check .
 ```
 
+### Diagnostic Scripts
+
+Located in `tests/diagnostics/`, these scripts help debug specific issues:
+
+| Script | Purpose |
+|--------|---------|
+| `diagnose_environment.py` | Check Python environment and dependencies |
+| `diagnose_llm_health.py` | Test LLM provider connectivity |
+| `diagnose_ingestion.py` | Debug email parsing issues |
+| `diagnose_batch_replies.py` | Test batch reply generation |
+| `ssl_diagnostics.py` | Debug SSL certificate issues |
+| `outlook_diagnostics.py` | Test Outlook/AppleScript integration |
+
+Run with: `uv run python tests/diagnostics/<script>.py`
+
 ### Project Structure
 
 ```
@@ -180,7 +195,7 @@ outlook-bot/
 ├── tests/
 │   ├── unit/             # Unit tests
 │   ├── integration/      # Integration tests
-│   └── diagnostics/      # Debugging scripts
+│   └── diagnostics/      # Debugging & diagnostic scripts
 ├── config.yaml           # User configuration
 ├── system_prompt.txt     # LLM persona definition
 └── .env                  # API keys (gitignored)
@@ -217,9 +232,10 @@ When running as a packaged `.app`:
 
 ### SSL Certificate Errors
 
-The app includes automatic Zscaler certificate handling. If issues persist:
-1. SSL verification is disabled by default for corporate environments
-2. Check `ssl_utils.py` for certificate bundle locations
+The app includes automatic Zscaler/corporate proxy certificate handling:
+1. SSL verification is **disabled by default** in `llm.py` for corporate environments
+2. When enabled, it auto-discovers and merges Zscaler certificates with the system bundle
+3. See `ssl_utils.py` for certificate bundle locations and customization
 
 ### No models detected
 
