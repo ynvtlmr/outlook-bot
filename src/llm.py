@@ -124,10 +124,11 @@ class LLMService:
             "edit",
             "001",
             "002",  # Legacy numeric versions sometimes imply specialized/old
-            "preview",
+            # "preview",
             "exp",
             "codex",
             "legacy",
+            "robotics",
         ]
 
         # 1. Gemini Discovery
@@ -154,9 +155,9 @@ class LLMService:
                     if "exp" in lower_id:
                         continue
 
-                    # 3. Exclude Expensive/Pro models
-                    if any(key in lower_id for key in ["pro", "ultra"]):
-                        continue
+                    # # 3. Exclude Expensive/Pro models
+                    # if any(key in lower_id for key in ["pro", "ultra"]):
+                    #     continue
 
                     # 4. Filter out specific date-based versions (e.g. -2024-07-18, -0125)
                     # Pattern 1: YYYY-MM-DD
@@ -170,9 +171,9 @@ class LLMService:
                         # gpt-3.5-turbo-0125 (ends in 4 digits).
                         continue
 
-                    # 5. Must include "Cheap/Fast" indicators
-                    if not any(key in lower_id for key in ["flash", "lite"]):
-                        continue
+                    # # 5. Must include "Cheap/Fast" indicators
+                    # if not any(key in lower_id for key in ["flash", "lite"]):
+                    #     continue
 
                     self.available_models.append({"id": model_id, "provider": "gemini"})
 
@@ -197,15 +198,15 @@ class LLMService:
                     if any(k in lower_id for k in EXCLUDED_KEYWORDS):
                         continue
 
-                    # 2. Exclude Expensive/Pro models and legacy
-                    if "pro" in lower_id:
-                        continue
-                    if "instruct" in lower_id:
-                        continue
+                    # # 2. Exclude Expensive/Pro models and legacy
+                    # if "pro" in lower_id:
+                    #     continue
+                    # if "instruct" in lower_id:
+                    #     continue
 
-                    if "gpt-4" in lower_id and "mini" not in lower_id:
-                        # Exclude gpt-4, gpt-4-turbo, gpt-4o (keep only mini)
-                        continue
+                    # if "gpt-4" in lower_id and "mini" not in lower_id:
+                    #     # Exclude gpt-4, gpt-4-turbo, gpt-4o (keep only mini)
+                    #     continue
 
                     # 3. Filter out specific date-based versions (e.g. -2024-07-18, -0125)
                     if re.search(r"-\d{4}-\d{2}-\d{2}", lower_id):
@@ -213,10 +214,10 @@ class LLMService:
                     if re.search(r"-\d{4}$", lower_id):
                         continue
 
-                    # 4. Must include "Cheap/Fast" indicators
-                    # target: gpt-4o-mini, gpt-3.5-turbo
-                    if not any(key in lower_id for key in ["mini", "turbo"]):
-                        continue
+                    # # 4. Must include "Cheap/Fast" indicators
+                    # # target: gpt-4o-mini, gpt-3.5-turbo
+                    # if not any(key in lower_id for key in ["mini", "turbo"]):
+                    #     continue
 
                     self.available_models.append({"id": mid, "provider": "openai"})
                 
@@ -229,8 +230,8 @@ class LLMService:
                 import traceback
                 print(f"  -> Traceback: {traceback.format_exc()}")
 
-        # Sort models by estimated cost/efficiency
-        self._sort_models_by_cost()
+        # # Sort models by estimated cost/efficiency
+        # self._sort_models_by_cost()
 
         if not self.available_models:
             print("  -> No suitable cheap/fast models found. Please check API Keys.")
