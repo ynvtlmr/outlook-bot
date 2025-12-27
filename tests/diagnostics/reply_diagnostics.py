@@ -139,7 +139,7 @@ def run_diagnostics():
     log_msg(f"reply_to_message completed in {elapsed:.2f}s")
     log_msg(f"Result: {result}")
 
-    if "Success" not in result:
+    if result is None or "Success" not in result:
         log(test_name, "FAIL", f"AppleScript error: {result}")
     else:
         log_msg("AppleScript reported success, waiting for draft to save/sync...")
@@ -189,7 +189,7 @@ def run_diagnostics():
     log_msg(f"reply_to_message completed in {elapsed:.2f}s")
     log_msg(f"Result: {result}")
 
-    if "Success" not in result:
+    if result is None or "Success" not in result:
         log(test_name, "FAIL", f"AppleScript error: {result}")
     else:
         log_msg("AppleScript reported success, waiting for draft to save/sync...")
@@ -237,7 +237,7 @@ def run_diagnostics():
     log_msg(f"reply_to_message completed in {elapsed:.2f}s")
     log_msg(f"Result: {result}")
 
-    if "Success" not in result:
+    if result is None or "Success" not in result:
         log(test_name, "FAIL", f"AppleScript error: {result}")
     else:
         log_msg("AppleScript reported success, waiting for draft to save/sync...")

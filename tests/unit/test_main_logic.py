@@ -24,6 +24,6 @@ def test_process_replies_flow(mocker):
 
 
 def test_process_replies_no_candidates():
-    # Should exit early
-    process_replies([], None, None, None)
+    # Should exit early - None values are intentional for testing early exit
+    process_replies([], None, None, None)  # type: ignore[arg-type]
     # No crash means pass
