@@ -10,3 +10,4 @@ build/
 .ruff_cache/
 zscaler_cert_bundle.pem
 .coverage
+system_prompt.txt

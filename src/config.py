@@ -26,7 +26,16 @@ os.makedirs(USER_DATA_DIR, exist_ok=True)
 CONFIG_PATH = os.path.join(USER_DATA_DIR, "config.yaml")
 ENV_PATH = os.path.join(USER_DATA_DIR, ".env")
 SYSTEM_PROMPT_PATH = os.path.join(USER_DATA_DIR, "system_prompt.txt")
+SYSTEM_PROMPT_EXAMPLE_PATH = os.path.join(RESOURCE_DIR, "system_prompt.example.txt")
 OUTPUT_DIR = os.path.join(USER_DATA_DIR, "output")
+
+# Ensure System Prompt exists from example if missing
+if not os.path.exists(SYSTEM_PROMPT_PATH) and os.path.exists(SYSTEM_PROMPT_EXAMPLE_PATH):
+    import shutil
+    try:
+        shutil.copy2(SYSTEM_PROMPT_EXAMPLE_PATH, SYSTEM_PROMPT_PATH)
+    except Exception as e:
+        print(f"Warning: Could not create default system_prompt.txt: {e}")
 
 # Resources (Bundled or Source)
 APPLESCRIPTS_DIR = os.path.join(RESOURCE_DIR, "src", "apple_scripts")
