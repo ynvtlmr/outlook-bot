@@ -61,12 +61,19 @@ def load_system_prompt() -> str:
         return "You are a helpful assistant."
 
 
-def filter_threads_for_replies(threads: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def filter_threads_by_age_and_flag(threads: list[list[dict[str, Any]]], verbose: bool = True) -> list[list[dict[str, Any]]]:
     """
-    Identifies threads that need a reply based on flag status and activity date.
-    Returns a list of dicts: {'thread': thread, 'target_msg': msg, 'subject': subject}
+    Filters threads to only include those with active flags and no activity 
+    for more than DAYS_THRESHOLD days.
+    
+    Args:
+        threads: List of thread objects (each thread is a list of message dicts)
+        verbose: Whether to print analysis messages
+        
+    Returns:
+        List of filtered thread objects that meet the criteria
     """
-    candidates = []
+    filtered_threads = []
 
     for i, thread in enumerate(threads):
         # 1. Check if thread has ANY active flag
@@ -76,7 +83,8 @@ def filter_threads_for_replies(threads: list[list[dict[str, Any]]]) -> list[dict
             continue
 
         subject = thread[0].get("subject", "No Subject")
-        print(f"\nAnalyzing Thread {i + 1}: {subject}")
+        if verbose:
+            print(f"\nAnalyzing Thread {i + 1}: {subject}")
 
         # 2. Find the TRULY latest activity date
         all_dates = []
@@ -91,22 +99,45 @@ def filter_threads_for_replies(threads: list[list[dict[str, Any]]]) -> list[dict
                 all_dates.append(buried_date)
 
         if not all_dates:
-            print("  -> Warning: Could not determine any activity date. Skipping.")
+            if verbose:
+                print("  -> Warning: Could not determine any activity date. Skipping.")
             continue
 
         latest_activity = max(all_dates)
         days_ago = (datetime.now() - latest_activity).days
 
-        print(f"  -> Latest activity: {latest_activity.strftime('%Y-%m-%d %H:%M:%S')} ({days_ago} days ago)")
+        if verbose:
+            print(f"  -> Latest activity: {latest_activity.strftime('%Y-%m-%d %H:%M:%S')} ({days_ago} days ago)")
 
-        # 3. Apply 7-day threshold
+        # 3. Apply days threshold
         if days_ago <= DAYS_THRESHOLD:
-            print(f"  -> Activity within {DAYS_THRESHOLD} days. No reply needed yet.")
+            if verbose:
+                print(f"  -> Activity within {DAYS_THRESHOLD} days. Skipping.")
             continue
 
-        print(f"  -> No activity for > {DAYS_THRESHOLD} days. Proceeding with draft.")
+        if verbose:
+            print(f"  -> No activity for > {DAYS_THRESHOLD} days. Including in filtered set.")
 
-        # 4. Find target message (latest in thread)
+        filtered_threads.append(thread)
+
+    return filtered_threads
+
+
+def filter_threads_for_replies(threads: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """
+    Identifies threads that need a reply based on flag status and activity date.
+    Returns a list of dicts: {'thread': thread, 'target_msg': msg, 'subject': subject}
+    """
+    candidates = []
+
+    # Use helper function to filter threads by age and flag
+    filtered_threads = filter_threads_by_age_and_flag(threads, verbose=True)
+
+    for thread in filtered_threads:
+        subject = thread[0].get("subject", "No Subject")
+        print(f"  -> Proceeding with draft for: {subject}")
+
+        # Find target message (latest in thread)
         sorted_thread = sorted(thread, key=lambda m: m.get("timestamp", datetime.min))
         target_msg = sorted_thread[-1]
 
@@ -285,24 +316,34 @@ def extract_client_name(thread: list[dict[str, Any]]) -> str:
 
 def generate_thread_summaries(flagged_threads: list[list[dict[str, Any]]], llm_service: llm.LLMService) -> None:
     """
-    Generates summaries and SF Notes for all flagged threads and creates a Word document.
+    Generates summaries and SF Notes for flagged threads that are older than DAYS_THRESHOLD days.
+    Only processes threads with active flags and no activity for more than the threshold.
+    Creates a Word document with the summaries.
     """
     if not flagged_threads:
         print("No flagged threads to summarize.")
         return
     
-    print(f"\n--- Generating Summaries for {len(flagged_threads)} Flagged Threads ---")
+    # Filter threads by age and flag status (same criteria as reply generation)
+    print(f"\n--- Filtering Threads for Summary Generation ---")
+    filtered_threads = filter_threads_by_age_and_flag(flagged_threads, verbose=True)
+    
+    if not filtered_threads:
+        print("No flagged threads meet the age threshold for summarization.")
+        return
+    
+    print(f"\n--- Generating Summaries for {len(filtered_threads)} Filtered Threads ---")
     
     threads_with_summaries = []
     
-    for idx, thread in enumerate(flagged_threads, 1):
+    for idx, thread in enumerate(filtered_threads, 1):
         # Guard against empty threads
         if not thread:
-            print(f"\nSkipping Thread {idx}/{len(flagged_threads)}: Empty thread")
+            print(f"\nSkipping Thread {idx}/{len(filtered_threads)}: Empty thread")
             continue
         
         subject = thread[0].get("subject", "No Subject")
-        print(f"\nProcessing Thread {idx}/{len(flagged_threads)}: {subject}")
+        print(f"\nProcessing Thread {idx}/{len(filtered_threads)}: {subject}")
         
         # Extract client name
         client_name = extract_client_name(thread)
@@ -395,7 +436,7 @@ def main() -> None:
         candidates = filter_threads_for_replies(flagged_threads)
         process_replies(candidates, client, combined_system_prompt, llm_service)
         
-        # Generate summaries for all flagged threads
+        # Generate summaries for flagged threads older than threshold
         print("\n" + "=" * 30 + "\n")
         generate_thread_summaries(flagged_threads, llm_service)
 
