@@ -95,14 +95,19 @@ class OutlookBotGUI(ctk.CTk):
         # --- Tabs for Configuration ---
         self.tab_view = ctk.CTkTabview(self)
         self.tab_view.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        # Add Prompt tab first to make it the default
+        self.tab_view.add("Prompt")
         self.tab_view.add("Configuration")
-        self.tab_view.add("System Prompt")
+        self.tab_view.add("API Keys")
+
+        # -- Tab: Prompt (default) --
+        self.setup_prompt_tab()
 
         # -- Tab: Configuration --
         self.setup_config_tab()
 
-        # -- Tab: System Prompt --
-        self.setup_prompt_tab()
+        # -- Tab: API Keys --
+        self.setup_api_keys_tab()
 
         # --- Log Output ---
         self.log_lbl = ctk.CTkLabel(self, text="Console Output:", font=("Arial", 12, "bold"))
@@ -118,8 +123,8 @@ class OutlookBotGUI(ctk.CTk):
         # Handle cleanup on close
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    def setup_config_tab(self):
-        tab = self.tab_view.tab("Configuration")
+    def setup_api_keys_tab(self):
+        tab = self.tab_view.tab("API Keys")
         tab.grid_columnconfigure(1, weight=1)
 
         # Gemini API Key
@@ -164,46 +169,50 @@ class OutlookBotGUI(ctk.CTk):
         self.btn_test_or = ctk.CTkButton(tab, text="Test", command=self.test_or, width=60, fg_color="#333333")
         self.btn_test_or.grid(row=2, column=3, padx=10, pady=10)
 
+    def setup_config_tab(self):
+        tab = self.tab_view.tab("Configuration")
+        tab.grid_columnconfigure(1, weight=1)
+
         # Days Threshold
         lbl_days = ctk.CTkLabel(tab, text="Days Threshold:")
-        lbl_days.grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        lbl_days.grid(row=0, column=0, padx=10, pady=10, sticky="w")
         self.entry_days = ctk.CTkEntry(tab, width=100)
-        self.entry_days.grid(row=3, column=1, padx=10, pady=10, sticky="w")
+        self.entry_days.grid(row=0, column=1, padx=10, pady=10, sticky="w")
 
         # Default Reply
         lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
-        lbl_reply.grid(row=4, column=0, padx=10, pady=10, sticky="nw")
+        lbl_reply.grid(row=1, column=0, padx=10, pady=10, sticky="nw")
         self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
-        self.txt_default_reply.grid(row=4, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        self.txt_default_reply.grid(row=1, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
 
         # Model Provider Selection
         lbl_provider = ctk.CTkLabel(tab, text="Model Provider:")
-        lbl_provider.grid(row=5, column=0, padx=10, pady=10, sticky="nw")
+        lbl_provider.grid(row=2, column=0, padx=10, pady=10, sticky="nw")
         self.combo_provider = ctk.CTkComboBox(tab, state="readonly", command=self.on_provider_change)
-        self.combo_provider.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
+        self.combo_provider.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
         self.combo_provider.set("All")
         self.combo_provider.configure(values=["All", "Gemini", "OpenAI", "OpenRouter"])
 
         # Search Entry
         self.entry_search = ctk.CTkEntry(tab, placeholder_text="Search models...")
-        self.entry_search.grid(row=5, column=2, padx=10, pady=10, sticky="ew")
+        self.entry_search.grid(row=2, column=2, padx=10, pady=10, sticky="ew")
         self.entry_search.bind("<KeyRelease>", self.on_search_change)
 
         # Model Selection
         lbl_model = ctk.CTkLabel(tab, text="Preferred Model:")
-        lbl_model.grid(row=6, column=0, padx=10, pady=10, sticky="nw")
+        lbl_model.grid(row=3, column=0, padx=10, pady=10, sticky="nw")
         self.combo_model = ctk.CTkComboBox(tab, state="readonly", command=self.on_model_selected)
-        self.combo_model.grid(row=6, column=1, padx=10, pady=10, sticky="ew")
+        self.combo_model.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
 
         # Refresh Models Button
         self.btn_refresh_models = ctk.CTkButton(tab, text="Refresh Models", command=self.refresh_models_list)
-        self.btn_refresh_models.grid(row=6, column=2, padx=10, pady=10, sticky="nw")
+        self.btn_refresh_models.grid(row=3, column=2, padx=10, pady=10, sticky="nw")
 
         # Store available models list for dropdown (list of dicts from llm service: {'id':..., 'provider':...})
         self.available_models_data = []
 
     def setup_prompt_tab(self):
-        tab = self.tab_view.tab("System Prompt")
+        tab = self.tab_view.tab("Prompt")
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
 
