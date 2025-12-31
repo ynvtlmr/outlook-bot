@@ -2,6 +2,7 @@ import json
 import os
 import re
 import ssl
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from google import genai
@@ -258,6 +259,31 @@ class LLMService:
         """Returns list of model names for display."""
         return [m["id"] for m in self.available_models]
 
+    def _reorder_models(self, preferred_model: Optional[str]) -> List[Dict[str, Any]]:
+        """
+        Reorders available models to try a preferred model first.
+        
+        Args:
+            preferred_model: Optional model ID to prioritize
+            
+        Returns:
+            List of model dictionaries with preferred model first (if found)
+        """
+        models_to_try = self.available_models.copy()
+        if preferred_model:
+            preferred_entry = None
+            for i, model_entry in enumerate(models_to_try):
+                if model_entry["id"] == preferred_model:
+                    preferred_entry = models_to_try.pop(i)
+                    break
+            
+            if preferred_entry:
+                models_to_try.insert(0, preferred_entry)
+                print(f"[Info] Using preferred model: {preferred_model}")
+            else:
+                print(f"[Warning] Preferred model '{preferred_model}' not found. Using default order.")
+        return models_to_try
+
     def refresh_models(self):
         """Re-initializes clients and rediscovers models (useful for GUI)."""
         # Reload env vars in case they changed in memory
@@ -280,20 +306,7 @@ class LLMService:
         prompt = f"{system_prompt}\n\nEmail Thread:\n{email_body}\n\nResponse:"
 
         # Reorder models to try preferred_model first if specified
-        models_to_try = self.available_models.copy()
-        if preferred_model:
-            # Find the preferred model and move it to the front
-            preferred_entry = None
-            for i, model_entry in enumerate(models_to_try):
-                if model_entry["id"] == preferred_model:
-                    preferred_entry = models_to_try.pop(i)
-                    break
-
-            if preferred_entry:
-                models_to_try.insert(0, preferred_entry)
-                print(f"[Info] Using preferred model: {preferred_model}")
-            else:
-                print(f"[Warning] Preferred model '{preferred_model}' not found. Using default order.")
+        models_to_try = self._reorder_models(preferred_model)
 
         for model_entry in models_to_try:
             model_id = model_entry["id"]
@@ -357,20 +370,9 @@ class LLMService:
             return {}
 
         # Reorder models to try preferred_model first if specified
-        models_to_try = self.available_models.copy()
+        models_to_try = self._reorder_models(preferred_model)
         if preferred_model:
-            # Find the preferred model and move it to the front
-            preferred_entry = None
-            for i, model_entry in enumerate(models_to_try):
-                if model_entry["id"] == preferred_model:
-                    preferred_entry = models_to_try.pop(i)
-                    break
-
-            if preferred_entry:
-                models_to_try.insert(0, preferred_entry)
-                print(f"[Info] Using preferred model for batch: {preferred_model}")
-            else:
-                print(f"[Warning] Preferred model '{preferred_model}' not found. Using default order.")
+            print(f"[Info] Using preferred model for batch: {preferred_model}")
 
         # Prepare the centralized prompt (same as in genai.py)
         prompt_intro = (
@@ -516,16 +518,7 @@ class LLMService:
         )
 
         # Reorder models to try preferred_model first if specified
-        models_to_try = self.available_models.copy()
-        if preferred_model:
-            preferred_entry = None
-            for i, model_entry in enumerate(models_to_try):
-                if model_entry["id"] == preferred_model:
-                    preferred_entry = models_to_try.pop(i)
-                    break
-            
-            if preferred_entry:
-                models_to_try.insert(0, preferred_entry)
+        models_to_try = self._reorder_models(preferred_model)
 
         for model_entry in models_to_try:
             model_id = model_entry["id"]
@@ -563,7 +556,6 @@ class LLMService:
             print("Error: No available models to generate SF Note.")
             return None
 
-        from datetime import datetime
         today = datetime.now()
         # Format: MM/DD/YY without leading zeros (e.g., "1/10/25")
         date_str = f"{today.month}/{today.day}/{str(today.year)[-2:]}"
@@ -583,16 +575,7 @@ class LLMService:
         )
 
         # Reorder models to try preferred_model first if specified
-        models_to_try = self.available_models.copy()
-        if preferred_model:
-            preferred_entry = None
-            for i, model_entry in enumerate(models_to_try):
-                if model_entry["id"] == preferred_model:
-                    preferred_entry = models_to_try.pop(i)
-                    break
-            
-            if preferred_entry:
-                models_to_try.insert(0, preferred_entry)
+        models_to_try = self._reorder_models(preferred_model)
 
         for model_entry in models_to_try:
             model_id = model_entry["id"]

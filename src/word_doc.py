@@ -66,7 +66,23 @@ def format_thread_content(thread):
     formatted_lines = []
     
     # Sort messages by timestamp to ensure chronological order
-    sorted_thread = sorted(thread, key=lambda m: m.get("timestamp", datetime.min))
+    # Normalize timestamps to datetime objects for safe sorting
+    def normalize_timestamp(msg):
+        ts = msg.get("timestamp")
+        if ts is None:
+            return datetime.min
+        if isinstance(ts, datetime):
+            return ts
+        if isinstance(ts, str):
+            # Try to parse string timestamp if needed
+            try:
+                return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
+                return datetime.min
+        # For other types, fall back to min
+        return datetime.min
+    
+    sorted_thread = sorted(thread, key=normalize_timestamp)
     
     for i, msg in enumerate(sorted_thread, 1):
         formatted_lines.append(f"\n--- Message {i} ---")

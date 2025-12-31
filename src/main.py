@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 
 import llm
-from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, PREFERRED_MODEL, SYSTEM_PROMPT_PATH
+from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, OUTPUT_DIR, PREFERRED_MODEL, SYSTEM_PROMPT_PATH
 from date_utils import get_current_date_context, get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
@@ -209,7 +209,8 @@ def extract_client_name_from_subject(subject: str) -> str:
             return potential_client
     
     # Look for "Client Name -" or "Client Name =>" pattern
-    match = re.search(r"^([^<>-]+?)\s*[-=]>", subject_clean)
+    # Match both plain hyphens (with or without following text) and arrow patterns (=>)
+    match = re.search(r"^([^<>-]+?)\s*[-=](?:>|\s|$)", subject_clean)
     if match:
         potential_client = match.group(1).strip()
         if not is_gen_ii_email(potential_client):
@@ -288,6 +289,11 @@ def generate_thread_summaries(flagged_threads: list[list[dict[str, Any]]], llm_s
     threads_with_summaries = []
     
     for idx, thread in enumerate(flagged_threads, 1):
+        # Guard against empty threads
+        if not thread:
+            print(f"\nSkipping Thread {idx}/{len(flagged_threads)}: Empty thread")
+            continue
+        
         subject = thread[0].get("subject", "No Subject")
         print(f"\nProcessing Thread {idx}/{len(flagged_threads)}: {subject}")
         
@@ -324,10 +330,10 @@ def generate_thread_summaries(flagged_threads: list[list[dict[str, Any]]], llm_s
     
     if threads_with_summaries:
         # Create Word document
-        output_dir = os.path.join(os.getcwd(), "output")
-        os.makedirs(output_dir, exist_ok=True)
+        # Use OUTPUT_DIR from config instead of os.getcwd() for reliability
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         date_str = datetime.now().strftime("%m-%d-%Y")
-        output_path = os.path.join(output_dir, f"email_summary_{date_str}.docx")
+        output_path = os.path.join(OUTPUT_DIR, f"email_summary_{date_str}.docx")
         
         print(f"\n--- Creating Word Document ---")
         result = create_summary_document(threads_with_summaries, output_path)
