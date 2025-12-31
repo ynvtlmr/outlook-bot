@@ -12,6 +12,7 @@ from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, OUTPUT_DIR, PREFERRED_MODEL
 from date_utils import get_current_date_context, get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
+from signature_stripper import strip_signatures
 from word_doc import create_summary_document, format_thread_content
 
 
@@ -137,7 +138,13 @@ def process_replies(
             print(f"  -> Error: No Message ID found for target message in '{item['subject']}'.")
             continue
 
-        batch_jobs.append({"id": msg_id, "subject": item["subject"], "content": target_msg.get("content", "")})
+        # Strip signatures from content before sending to LLM
+        # Pass thread context for repetition detection
+        thread = item.get("thread", [])
+        raw_content = target_msg.get("content", "")
+        cleaned_content = strip_signatures(raw_content, thread_context=thread)
+        
+        batch_jobs.append({"id": msg_id, "subject": item["subject"], "content": cleaned_content})
 
     if not batch_jobs:
         return

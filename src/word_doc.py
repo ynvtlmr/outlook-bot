@@ -2,55 +2,12 @@
 Word Document Generator for Email Thread Summaries
 """
 import os
-import re
 from datetime import datetime
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-
-# Gen II footer text to exclude from LLM processing
-GEN_II_FOOTER_START = "NOTICE: Unless otherwise stated, the content of this e-mail"
-GEN_II_FOOTER_END = "which can be found here."
-
-
-def strip_gen_ii_footer(content):
-    """
-    Removes the Gen II legal footer from email content to save tokens.
-    
-    Args:
-        content: Email content string
-        
-    Returns:
-        Content with footer removed if found, original content otherwise
-    """
-    if not content:
-        return content
-    
-    # Look for the footer start marker
-    # Use case-insensitive search and handle variations in whitespace
-    footer_pattern = re.compile(
-        r'NOTICE:\s*Unless otherwise stated.*?which can be found here\.',
-        re.IGNORECASE | re.DOTALL
-    )
-    
-    # Try to find and remove the footer
-    cleaned = footer_pattern.sub('', content)
-    
-    # Also try a more flexible approach - look for just the start phrase
-    # and remove everything from there to the end if it's near the end of the content
-    start_marker = re.compile(r'NOTICE:\s*Unless otherwise stated', re.IGNORECASE)
-    match = start_marker.search(cleaned)
-    
-    if match:
-        # If the marker appears in the last 30% of the content, it's likely a footer
-        marker_pos = match.start()
-        content_length = len(cleaned)
-        if marker_pos > content_length * 0.7:
-            # Remove everything from the marker to the end
-            cleaned = cleaned[:marker_pos].rstrip()
-    
-    return cleaned
+from signature_stripper import strip_signatures
 
 
 def format_thread_content(thread):
@@ -92,8 +49,9 @@ def format_thread_content(thread):
         if msg.get('flag_status'):
             formatted_lines.append(f"Flag Status: {msg.get('flag_status')}")
         formatted_lines.append("\nContent:")
-        # Strip Gen II footer before adding content to save tokens
-        content = strip_gen_ii_footer(msg.get('content', ''))
+        # Strip signatures before adding content to save tokens
+        # Pass thread context for repetition detection
+        content = strip_signatures(msg.get('content', ''), thread_context=thread)
         formatted_lines.append(content)
         formatted_lines.append("\n" + "=" * 80)
     
