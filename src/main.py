@@ -7,8 +7,9 @@ from collections import Counter
 from datetime import datetime
 from typing import Any
 
+import yaml
 import llm
-from config import APPLESCRIPTS_DIR, DAYS_THRESHOLD, OUTPUT_DIR, PREFERRED_MODEL, SYSTEM_PROMPT_PATH
+from config import APPLESCRIPTS_DIR, CONFIG_PATH, OUTPUT_DIR, SYSTEM_PROMPT_PATH
 from date_utils import get_current_date_context, get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
@@ -60,7 +61,9 @@ def load_system_prompt() -> str:
         return "You are a helpful assistant."
 
 
-def filter_threads_for_replies(threads: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def filter_threads_for_replies(
+    threads: list[list[dict[str, Any]]], days_threshold: int
+) -> list[dict[str, Any]]:
     """
     Identifies threads that need a reply based on flag status and activity date.
     Returns a list of dicts: {'thread': thread, 'target_msg': msg, 'subject': subject}
@@ -99,11 +102,11 @@ def filter_threads_for_replies(threads: list[list[dict[str, Any]]]) -> list[dict
         print(f"  -> Latest activity: {latest_activity.strftime('%Y-%m-%d %H:%M:%S')} ({days_ago} days ago)")
 
         # 3. Apply 7-day threshold
-        if days_ago <= DAYS_THRESHOLD:
-            print(f"  -> Activity within {DAYS_THRESHOLD} days. No reply needed yet.")
+        if days_ago <= days_threshold:
+            print(f"  -> Activity within {days_threshold} days. No reply needed yet.")
             continue
 
-        print(f"  -> No activity for > {DAYS_THRESHOLD} days. Proceeding with draft.")
+        print(f"  -> No activity for > {days_threshold} days. Proceeding with draft.")
 
         # 4. Find target message (latest in thread)
         sorted_thread = sorted(thread, key=lambda m: m.get("timestamp", datetime.min))
@@ -119,6 +122,7 @@ def process_replies(
     client: OutlookClient,
     system_prompt: str,
     llm_service: llm.LLMService,
+    preferred_model: str | None = None,
 ) -> None:
     """
     Generates replies for candidates and creates drafts.
@@ -143,7 +147,7 @@ def process_replies(
         return
 
     print(f"\nProcessing batch of {len(batch_jobs)} emails with LLM Service...")
-    batch_replies = llm_service.generate_batch_replies(batch_jobs, system_prompt, preferred_model=PREFERRED_MODEL)
+    batch_replies = llm_service.generate_batch_replies(batch_jobs, system_prompt, preferred_model=preferred_model)
 
     print(f"Received {len(batch_replies)} replies from LLM Service.")
 
@@ -276,7 +280,9 @@ def extract_client_name(thread: list[dict[str, Any]]) -> str:
     return extract_client_name_from_subject(subject)
 
 
-def generate_thread_summaries(flagged_threads: list[list[dict[str, Any]]], llm_service: llm.LLMService) -> None:
+def generate_thread_summaries(
+    flagged_threads: list[list[dict[str, Any]]], llm_service: llm.LLMService, preferred_model: str | None = None
+) -> None:
     """
     Generates summaries and SF Notes for all flagged threads and creates a Word document.
     """
@@ -306,11 +312,11 @@ def generate_thread_summaries(flagged_threads: list[list[dict[str, Any]]], llm_s
         
         # Generate summary
         print(f"  -> Generating summary...")
-        summary = llm_service.generate_thread_summary(thread_content, preferred_model=PREFERRED_MODEL)
+        summary = llm_service.generate_thread_summary(thread_content, preferred_model=preferred_model)
         
         # Generate SF Note
         print(f"  -> Generating SF Note...")
-        sf_note = llm_service.generate_sf_note(thread_content, preferred_model=PREFERRED_MODEL)
+        sf_note = llm_service.generate_sf_note(thread_content, preferred_model=preferred_model)
         
         if summary:
             threads_with_summaries.append({
@@ -359,6 +365,20 @@ def main() -> None:
         if not wait_for_outlook_ready():
             return
 
+        # 0.6 Load Config (Dynamically to catch GUI changes)
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                config_data = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            config_data = {}
+        except Exception as e:
+            print(f"Warning: Error loading config.yaml: {e}")
+            config_data = {}
+
+        days_threshold = config_data.get("days_threshold", 5)
+        preferred_model = config_data.get("preferred_model", None)
+        print(f"Configuration Loaded: Days Threshold={days_threshold}, Preferred Model={preferred_model}")
+
         # 1. Scrape Flagged
         print("\n" + "=" * 30 + "\n")
         flagged_threads = run_scraper(mode="flagged")
@@ -385,12 +405,12 @@ def main() -> None:
             print(f"Error initializing LLM Service: {e}")
             return
 
-        candidates = filter_threads_for_replies(flagged_threads)
-        process_replies(candidates, client, combined_system_prompt, llm_service)
+        candidates = filter_threads_for_replies(flagged_threads, days_threshold)
+        process_replies(candidates, client, combined_system_prompt, llm_service, preferred_model)
         
         # Generate summaries for all flagged threads
         print("\n" + "=" * 30 + "\n")
-        generate_thread_summaries(flagged_threads, llm_service)
+        generate_thread_summaries(flagged_threads, llm_service, preferred_model)
 
     except Exception as e:
         print(f"Error during execution: {e}")

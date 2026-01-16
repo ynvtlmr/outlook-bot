@@ -16,7 +16,6 @@ class TestMainLogic(unittest.TestCase):
         with patch("main.get_outlook_version", return_value=None):
             assert main.check_outlook_status() is False
 
-    @patch("main.DAYS_THRESHOLD", 7)
     def test_filter_threads_for_replies(self):
         """Test filtering logic based on flags and dates."""
 
@@ -57,7 +56,7 @@ class TestMainLogic(unittest.TestCase):
 
         threads = [thread1, thread2, thread3]
 
-        candidates = main.filter_threads_for_replies(threads)
+        candidates = main.filter_threads_for_replies(threads, days_threshold=7)
 
         assert len(candidates) == 1
         assert candidates[0]["subject"] == "Old Active"
@@ -73,7 +72,7 @@ class TestMainLogic(unittest.TestCase):
         mock_service.generate_batch_replies.return_value = {"mid1": "Generated Reply"}
 
         with patch("main.create_draft_reply") as mock_create_draft:
-            main.process_replies(candidates, mock_client, "sys prompt", mock_service)
+            main.process_replies(candidates, mock_client, "sys prompt", mock_service, preferred_model="gpt-4")
 
             mock_service.generate_batch_replies.assert_called_once()
             mock_create_draft.assert_called_once_with(mock_client, "mid1", "Subj", "Generated Reply")
@@ -83,7 +82,7 @@ class TestMainLogic(unittest.TestCase):
         mock_client = MagicMock()
         mock_service = MagicMock()
 
-        main.process_replies([], mock_client, "sys", mock_service)
+        main.process_replies([], mock_client, "sys", mock_service, preferred_model="gpt-4")
         mock_service.generate_batch_replies.assert_not_called()
 
     def test_wait_for_outlook_ready_success(self):
@@ -101,9 +100,12 @@ class TestMainLogic(unittest.TestCase):
     @patch("main.run_scraper")
     @patch("main.OutlookClient")
     @patch("main.llm.LLMService")
-    def test_main_execution_flow(self, mock_llm, mock_client_cls, mock_scraper, mock_wait):
+    @patch("main.yaml.safe_load")
+    @patch("builtins.open")
+    def test_main_execution_flow(self, mock_open, mock_yaml, mock_llm, mock_client_cls, mock_scraper, mock_wait):
         """Test proper main flow: Activate -> Wait -> Scrape."""
         mock_scraper.return_value = []
+        mock_yaml.return_value = {"days_threshold": 5, "preferred_model": "gpt-4"}
         
         main.main()
         
