@@ -4,11 +4,8 @@ from main import filter_threads_for_replies
 
 
 # Mock constant in config if necessary, or patch it
-def test_filter_threads(mock_thread_list, mocker):
-    # Patch DAYS_THRESHOLD to be sure
-    mocker.patch("main.DAYS_THRESHOLD", 7)
-
-    candidates = filter_threads_for_replies(mock_thread_list)
+def test_filter_threads(mock_thread_list):
+    candidates = filter_threads_for_replies(mock_thread_list, days_threshold=7)
 
     # Input has 3 threads:
     # 1. Active, Recent (1 day ago) -> Should be ignored (Threshold <= 7 means "Recent is < 7 days old"??)
@@ -26,11 +23,9 @@ def test_filter_threads(mock_thread_list, mocker):
     assert candidates[0]["subject"] == "Active Old"
 
 
-def test_filter_threads_edge_case(mocker):
+def test_filter_threads_edge_case():
     """Test that threads exactly at the threshold boundary are NOT processed (boundary is inclusive)."""
     from datetime import timedelta
-
-    mocker.patch("main.DAYS_THRESHOLD", 7)
 
     now = datetime.now()
     # Thread exactly 7 days old (should NOT be processed - boundary is inclusive)
@@ -45,7 +40,7 @@ def test_filter_threads_edge_case(mocker):
         }
     ]
 
-    candidates = filter_threads_for_replies([thread_at_boundary])
+    candidates = filter_threads_for_replies([thread_at_boundary], days_threshold=7)
 
     # 7 <= 7 means it's still "recent" and should be ignored
     assert len(candidates) == 0
