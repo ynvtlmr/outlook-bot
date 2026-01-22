@@ -262,6 +262,8 @@ on run argv
 			         end if
 			     on error
 			     end try
+			     on error
+			     end try
 			end repeat
 
             -- 3.5 Add BCC if provided
