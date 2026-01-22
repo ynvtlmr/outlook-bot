@@ -262,10 +262,10 @@ class LLMService:
     def _reorder_models(self, preferred_model: Optional[str]) -> List[Dict[str, Any]]:
         """
         Reorders available models to try a preferred model first.
-        
+
         Args:
             preferred_model: Optional model ID to prioritize
-            
+
         Returns:
             List of model dictionaries with preferred model first (if found)
         """
@@ -276,7 +276,7 @@ class LLMService:
                 if model_entry["id"] == preferred_model:
                     preferred_entry = models_to_try.pop(i)
                     break
-            
+
             if preferred_entry:
                 models_to_try.insert(0, preferred_entry)
                 print(f"[Info] Using preferred model: {preferred_model}")
@@ -495,11 +495,11 @@ class LLMService:
     def generate_thread_summary(self, thread_content, preferred_model=None):
         """
         Generates a concise, one-paragraph summary of an email thread.
-        
+
         Args:
             thread_content: Formatted string containing the full email thread
             preferred_model: Optional model ID to use for generation
-            
+
         Returns:
             Summary string, or None if generation fails
         """
@@ -544,11 +544,11 @@ class LLMService:
     def generate_sf_note(self, thread_content, preferred_model=None):
         """
         Generates an SF Note (Salesforce note) for an email thread.
-        
+
         Args:
             thread_content: Formatted string containing the full email thread
             preferred_model: Optional model ID to use for generation
-            
+
         Returns:
             SF Note string, or None if generation fails
         """
@@ -562,14 +562,18 @@ class LLMService:
 
         sf_note_prompt = (
             "You are creating an SF Note (Salesforce note) for an email thread. "
-            "An SF Note is a one-paragraph note meant to be added to Salesforce as an internal record of next steps.\n\n"
+            "An SF Note is a one-paragraph note meant to be added to Salesforce "
+            "as an internal record of next steps.\n\n"
             "REQUIREMENTS:\n"
-            "- Always start with today's date in MM/DD/YY format without leading zeros (e.g., \"1/10/25\" for January 10th, 2025)\n"
+            "- Always start with today's date in MM/DD/YY format without leading zeros "
+            '(e.g., "1/10/25" for January 10th, 2025)\n'
             "- Be focused on action items and next steps rather than product features\n"
-            "- Be written from Gen II's perspective (using \"we\" when referring to Gen II tasks)\n"
+            '- Be written from Gen II\'s perspective (using "we" when referring to Gen II tasks)\n'
             "- Be kept to a single paragraph as an internal reference\n"
             "- Be concise and business-focused\n"
-            "- Summarize this status update into a Short & Punchy 'TL;DR' style update. Use high-energy, conversational language and get straight to the point. Strip out any fluff, use short sentences, and make it easy to digest in under 10 seconds.\n\n"
+            "- Summarize this status update into a Short & Punchy 'TL;DR' style update. "
+            "Use high-energy, conversational language and get straight to the point. "
+            "Strip out any fluff, use short sentences, and make it easy to digest in under 10 seconds.\n\n"
             f"Email Thread:\n{thread_content}\n\n"
             f"SF Note (start with {date_str} and write one paragraph):"
         )

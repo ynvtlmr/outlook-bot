@@ -4,6 +4,11 @@ on run argv
 	if (count of argv) > 1 then
 		set responseBody to item 2 of argv
 	end if
+    
+    set bccAddress to ""
+    if (count of argv) > 2 then
+        set bccAddress to item 3 of argv
+    end if
 	
 	tell application "Microsoft Outlook"
 		try
@@ -257,7 +262,18 @@ on run argv
 			         end if
 			     on error
 			     end try
+			     on error
+			     end try
 			end repeat
+
+            -- 3.5 Add BCC if provided
+            if bccAddress is not "" then
+                try
+                    make new bcc recipient at newDraft with properties {email address:{address:bccAddress}}
+                on error e
+                    -- log error if needed
+                end try
+            end if
 			
 			-- Wait before saving to ensure content is set
 			delay 1.0
