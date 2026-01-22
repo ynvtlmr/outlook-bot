@@ -19,6 +19,7 @@ from config import (
     ENV_OPENAI_API_KEY,
     ENV_OPENROUTER_API_KEY,
     ENV_PATH,
+    SALESFORCE_BCC,
     SYSTEM_PROMPT_PATH,
     CredentialManager,
 )
@@ -176,28 +177,34 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
         self.txt_default_reply.grid(row=4, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
 
+        # Salesforce BCC
+        lbl_bcc = ctk.CTkLabel(tab, text="Salesforce BCC:")
+        lbl_bcc.grid(row=5, column=0, padx=10, pady=10, sticky="w")
+        self.entry_bcc = ctk.CTkEntry(tab, width=400)
+        self.entry_bcc.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
+
         # Model Provider Selection
         lbl_provider = ctk.CTkLabel(tab, text="Model Provider:")
-        lbl_provider.grid(row=5, column=0, padx=10, pady=10, sticky="nw")
+        lbl_provider.grid(row=6, column=0, padx=10, pady=10, sticky="nw")
         self.combo_provider = ctk.CTkComboBox(tab, state="readonly", command=self.on_provider_change)
-        self.combo_provider.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
+        self.combo_provider.grid(row=6, column=1, padx=10, pady=10, sticky="ew")
         self.combo_provider.set("All")
         self.combo_provider.configure(values=["All", "Gemini", "OpenAI", "OpenRouter"])
 
         # Search Entry
         self.entry_search = ctk.CTkEntry(tab, placeholder_text="Search models...")
-        self.entry_search.grid(row=5, column=2, padx=10, pady=10, sticky="ew")
+        self.entry_search.grid(row=6, column=2, padx=10, pady=10, sticky="ew")
         self.entry_search.bind("<KeyRelease>", self.on_search_change)
 
         # Model Selection
         lbl_model = ctk.CTkLabel(tab, text="Preferred Model:")
-        lbl_model.grid(row=6, column=0, padx=10, pady=10, sticky="nw")
+        lbl_model.grid(row=7, column=0, padx=10, pady=10, sticky="nw")
         self.combo_model = ctk.CTkComboBox(tab, state="readonly", command=self.on_model_selected)
-        self.combo_model.grid(row=6, column=1, padx=10, pady=10, sticky="ew")
+        self.combo_model.grid(row=7, column=1, padx=10, pady=10, sticky="ew")
 
         # Refresh Models Button
         self.btn_refresh_models = ctk.CTkButton(tab, text="Refresh Models", command=self.refresh_models_list)
-        self.btn_refresh_models.grid(row=6, column=2, padx=10, pady=10, sticky="nw")
+        self.btn_refresh_models.grid(row=7, column=2, padx=10, pady=10, sticky="nw")
 
         # Store available models list for dropdown (list of dicts from llm service: {'id':..., 'provider':...})
         self.available_models_data = []
@@ -255,6 +262,10 @@ class OutlookBotGUI(ctk.CTk):
         # Default Reply
         self.txt_default_reply.delete("0.0", "end")
         self.txt_default_reply.insert("0.0", data.get("default_reply", DEFAULT_REPLY))
+
+        # Salesforce BCC
+        self.entry_bcc.delete(0, "end")
+        self.entry_bcc.insert(0, str(data.get("salesforce_bcc", SALESFORCE_BCC)))
 
         # Note: Models are loaded dynamically by refresh_models_list()
 
@@ -319,11 +330,19 @@ class OutlookBotGUI(ctk.CTk):
 
             days = int(self.entry_days.get())
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
+            salesforce_bcc = self.entry_bcc.get().strip()
             preferred_model = self.combo_model.get()
 
             # Update only the fields we manage, preserve others
             data = existing_data.copy()
-            data.update({"days_threshold": days, "default_reply": default_reply, "preferred_model": preferred_model})
+            data.update(
+                {
+                    "days_threshold": days,
+                    "default_reply": default_reply,
+                    "salesforce_bcc": salesforce_bcc,
+                    "preferred_model": preferred_model,
+                }
+            )
             # Note: disable_ssl_verify is now hardcoded in llm.py and not stored in config.yaml
 
             with open(CONFIG_PATH, "w") as f:

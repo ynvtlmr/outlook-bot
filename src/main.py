@@ -1,4 +1,3 @@
-
 import os
 import re
 import time
@@ -8,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 import yaml
+
 import llm
 from config import APPLESCRIPTS_DIR, CONFIG_PATH, OUTPUT_DIR, SYSTEM_PROMPT_PATH
 from date_utils import get_current_date_context, get_latest_date
@@ -61,9 +61,7 @@ def load_system_prompt() -> str:
         return "You are a helpful assistant."
 
 
-def filter_threads_for_replies(
-    threads: list[list[dict[str, Any]]], days_threshold: int
-) -> list[dict[str, Any]]:
+def filter_threads_for_replies(threads: list[list[dict[str, Any]]], days_threshold: int) -> list[dict[str, Any]]:
     """
     Identifies threads that need a reply based on flag status and activity date.
     Returns a list of dicts: {'thread': thread, 'target_msg': msg, 'subject': subject}
@@ -123,6 +121,7 @@ def process_replies(
     system_prompt: str,
     llm_service: llm.LLMService,
     preferred_model: str | None = None,
+    salesforce_bcc: str = "",
 ) -> None:
     """
     Generates replies for candidates and creates drafts.
@@ -157,12 +156,14 @@ def process_replies(
         reply_text = batch_replies.get(msg_id)
 
         if reply_text:
-            create_draft_reply(client, msg_id, subject, reply_text)
+            create_draft_reply(client, msg_id, subject, reply_text, salesforce_bcc)
         else:
             print(f"  -> Warning: No reply generated for '{subject}' (ID: {msg_id})")
 
 
-def create_draft_reply(client: OutlookClient, msg_id: str, subject: str, reply_text: str) -> None:
+def create_draft_reply(
+    client: OutlookClient, msg_id: str, subject: str, reply_text: str, bcc_address: str = ""
+) -> None:
     """Creates the actual draft in Outlook."""
     print(f"\nCreating draft for: {subject}")
     print("#" * 30)
@@ -175,7 +176,7 @@ def create_draft_reply(client: OutlookClient, msg_id: str, subject: str, reply_t
         # We don't need HTML escaping since we're using UI automation (keystrokes)
         formatted_reply = reply_text.replace("\n", "<br>")
 
-        result = client.reply_to_message(msg_id, formatted_reply)
+        result = client.reply_to_message(msg_id, formatted_reply, bcc_address=bcc_address)
         print(f"  -> {result}")
     except Exception as e:
         print(f"  -> Failed to create draft: {e}")
@@ -193,10 +194,10 @@ def extract_client_name_from_subject(subject: str) -> str:
     """Extract client name from subject line."""
     if not subject:
         return "Unknown Client"
-    
+
     # Remove common prefixes
     subject_clean = re.sub(r"^(RE|FWD|FW):\s*", "", subject, flags=re.IGNORECASE).strip()
-    
+
     # Look for patterns like "Client Name:" or "Client Name -"
     # Also look for "between X and Y" patterns
     match = re.search(r"between\s+([^<>]+?)\s+and", subject_clean, re.IGNORECASE)
@@ -204,14 +205,14 @@ def extract_client_name_from_subject(subject: str) -> str:
         potential_client = match.group(1).strip()
         if not is_gen_ii_email(potential_client):
             return potential_client
-    
+
     # Look for "Client Name:" pattern
     match = re.search(r"^([^:<>]+?):", subject_clean)
     if match:
         potential_client = match.group(1).strip()
         if not is_gen_ii_email(potential_client):
             return potential_client
-    
+
     # Look for "Client Name -" or "Client Name =>" pattern
     # Match both plain hyphens (with or without following text) and arrow patterns (=>)
     match = re.search(r"^([^<>-]+?)\s*[-=](?:>|\s|$)", subject_clean)
@@ -219,14 +220,14 @@ def extract_client_name_from_subject(subject: str) -> str:
         potential_client = match.group(1).strip()
         if not is_gen_ii_email(potential_client):
             return potential_client
-    
+
     # If no pattern found, return first part before any separator
     parts = re.split(r"[-=<>:]", subject_clean, 1)
     if parts and parts[0].strip():
         potential_client = parts[0].strip()
         if not is_gen_ii_email(potential_client):
             return potential_client
-    
+
     return subject_clean[:50] if subject_clean else "Unknown Client"
 
 
@@ -237,29 +238,29 @@ def extract_client_name(thread: list[dict[str, Any]]) -> str:
     """
     if not thread:
         return "Unknown Client"
-    
+
     # Get subject from first message
     subject = thread[0].get("subject", "")
-    
+
     # Look through all messages for sender names/addresses
     client_candidates = []
     for msg in thread:
         from_field = msg.get("from", "")
         if not from_field:
             continue
-        
+
         # Extract email address if present
         email_match = re.search(r"<([^>]+)>", from_field)
         email = email_match.group(1) if email_match else from_field
-        
+
         # Extract name if present
         name_match = re.search(r"^([^<]+)", from_field)
         name = name_match.group(1).strip() if name_match else ""
-        
+
         # Skip Gen II emails
         if is_gen_ii_email(email) or is_gen_ii_email(name):
             continue
-        
+
         # Prefer name over email
         if name:
             client_candidates.append(name)
@@ -268,14 +269,14 @@ def extract_client_name(thread: list[dict[str, Any]]) -> str:
             domain = email.split("@")[1] if "@" in email else email
             if "gen2fund.com" not in domain.lower():
                 client_candidates.append(domain.split(".")[0].title())
-    
+
     # If we found candidates, use the most common one
     if client_candidates:
         # Count occurrences
         counter = Counter(client_candidates)
         most_common = counter.most_common(1)[0][0]
         return most_common
-    
+
     # Fallback to subject line extraction
     return extract_client_name_from_subject(subject)
 
@@ -289,65 +290,67 @@ def generate_thread_summaries(
     if not flagged_threads:
         print("No flagged threads to summarize.")
         return
-    
+
     print(f"\n--- Generating Summaries for {len(flagged_threads)} Flagged Threads ---")
-    
+
     threads_with_summaries = []
-    
+
     for idx, thread in enumerate(flagged_threads, 1):
         # Guard against empty threads
         if not thread:
             print(f"\nSkipping Thread {idx}/{len(flagged_threads)}: Empty thread")
             continue
-        
+
         subject = thread[0].get("subject", "No Subject")
         print(f"\nProcessing Thread {idx}/{len(flagged_threads)}: {subject}")
-        
+
         # Extract client name
         client_name = extract_client_name(thread)
         print(f"  -> Client: {client_name}")
-        
+
         # Format thread content
         thread_content = format_thread_content(thread)
-        
+
         # Generate summary
-        print(f"  -> Generating summary...")
+        print("  -> Generating summary...")
         summary = llm_service.generate_thread_summary(thread_content, preferred_model=preferred_model)
-        
+
         # Generate SF Note
-        print(f"  -> Generating SF Note...")
+        print("  -> Generating SF Note...")
         sf_note = llm_service.generate_sf_note(thread_content, preferred_model=preferred_model)
-        
+
         if summary:
-            threads_with_summaries.append({
-                'subject': subject,
-                'client_name': client_name,
-                'summary': summary,
-                'sf_note': sf_note if sf_note else "SF Note generation failed.",
-                'thread': thread
-            })
-            print(f"  -> Summary generated successfully")
+            threads_with_summaries.append(
+                {
+                    "subject": subject,
+                    "client_name": client_name,
+                    "summary": summary,
+                    "sf_note": sf_note if sf_note else "SF Note generation failed.",
+                    "thread": thread,
+                }
+            )
+            print("  -> Summary generated successfully")
             if sf_note:
-                print(f"  -> SF Note generated successfully")
+                print("  -> SF Note generated successfully")
             else:
                 print(f"  -> Warning: Failed to generate SF Note for '{subject}'")
         else:
             print(f"  -> Warning: Failed to generate summary for '{subject}'")
-    
+
     if threads_with_summaries:
         # Create Word document
         # Use OUTPUT_DIR from config instead of os.getcwd() for reliability
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         date_str = datetime.now().strftime("%m-%d-%Y")
         output_path = os.path.join(OUTPUT_DIR, f"email_summary_{date_str}.docx")
-        
-        print(f"\n--- Creating Word Document ---")
+
+        print("\n--- Creating Word Document ---")
         result = create_summary_document(threads_with_summaries, output_path)
-        
+
         if result:
             print(f"✓ Word document created: {output_path}")
         else:
-            print(f"✗ Failed to create Word document.")
+            print("✗ Failed to create Word document.")
     else:
         print("No summaries generated. Skipping document creation.")
 
@@ -360,7 +363,7 @@ def main() -> None:
         client = OutlookClient(APPLESCRIPTS_DIR)
         print("Launching/Focusing Outlook...")
         client.activate_outlook()
-        
+
         # 0.5 Wait for Outlook to load
         if not wait_for_outlook_ready():
             return
@@ -377,7 +380,11 @@ def main() -> None:
 
         days_threshold = config_data.get("days_threshold", 5)
         preferred_model = config_data.get("preferred_model", None)
-        print(f"Configuration Loaded: Days Threshold={days_threshold}, Preferred Model={preferred_model}")
+        salesforce_bcc = config_data.get("salesforce_bcc", "")
+        print(
+            f"Configuration Loaded: Days Threshold={days_threshold}, "
+            f"Preferred Model={preferred_model}, BCC={salesforce_bcc}"
+        )
 
         # 1. Scrape Flagged
         print("\n" + "=" * 30 + "\n")
@@ -390,7 +397,7 @@ def main() -> None:
         # 2. Process Active Flags
         print("\n--- Processing Active Flags ---")
         # client already initialized
-        
+
         # Load System Prompt and Date Context
         base_system_prompt = load_system_prompt()
         date_context = get_current_date_context()
@@ -406,8 +413,15 @@ def main() -> None:
             return
 
         candidates = filter_threads_for_replies(flagged_threads, days_threshold)
-        process_replies(candidates, client, combined_system_prompt, llm_service, preferred_model)
-        
+        process_replies(
+            candidates,
+            client,
+            combined_system_prompt,
+            llm_service,
+            preferred_model=preferred_model,
+            salesforce_bcc=salesforce_bcc,
+        )
+
         # Generate summaries for all flagged threads
         print("\n" + "=" * 30 + "\n")
         generate_thread_summaries(flagged_threads, llm_service, preferred_model)
