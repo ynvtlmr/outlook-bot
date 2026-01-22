@@ -90,7 +90,7 @@ class TestMainLogic(unittest.TestCase):
         with patch("main.get_outlook_version", return_value="16.0"):
             assert main.wait_for_outlook_ready(timeout=1) is True
 
-    @patch("main.time.sleep", return_value=None) # Speed up test
+    @patch("main.time.sleep", return_value=None)  # Speed up test
     def test_wait_for_outlook_ready_timeout(self, mock_sleep):
         """Test wait loop timeout."""
         with patch("main.get_outlook_version", return_value=None):
@@ -106,9 +106,9 @@ class TestMainLogic(unittest.TestCase):
         """Test proper main flow: Activate -> Wait -> Scrape."""
         mock_scraper.return_value = []
         mock_yaml.return_value = {"days_threshold": 5, "preferred_model": "gpt-4"}
-        
+
         main.main()
-        
+
         mock_client_instance = mock_client_cls.return_value
         mock_client_instance.activate_outlook.assert_called_once()
         mock_wait.assert_called_once()

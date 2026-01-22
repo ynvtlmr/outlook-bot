@@ -32,6 +32,7 @@ OUTPUT_DIR = os.path.join(USER_DATA_DIR, "output")
 # Ensure System Prompt exists from example if missing
 if not os.path.exists(SYSTEM_PROMPT_PATH) and os.path.exists(SYSTEM_PROMPT_EXAMPLE_PATH):
     import shutil
+
     try:
         shutil.copy2(SYSTEM_PROMPT_EXAMPLE_PATH, SYSTEM_PROMPT_PATH)
     except Exception as e:
@@ -85,6 +86,7 @@ DAYS_THRESHOLD: int = _config_data.get("days_threshold", 5)
 DEFAULT_REPLY: str = _config_data.get(
     "default_reply", "Thank you for your email. I will review it and get back to you shortly."
 )
+SALESFORCE_BCC: str = _config_data.get("salesforce_bcc", "")
 
 # Preferred model for LLM generation (None means use first available)
 PREFERRED_MODEL: Optional[str] = _config_data.get("preferred_model", None)
