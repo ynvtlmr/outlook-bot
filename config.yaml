@@ -1,3 +1,4 @@
 days_threshold: 5
 default_reply: Thank you for your email. I will review it and get back to you shortly.
 preferred_model: gemini-3-pro-preview
+salesforce_bcc: emailtosalesforce@l-17uxnqnkdmr6wlis16e4xs1l0bqwoii4lnt38xy8g1ntga9i0m.g-gjjumai.na209.le.salesforce.com

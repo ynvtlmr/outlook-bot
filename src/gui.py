@@ -1,6 +1,7 @@
 import os
 import sys
 import threading
+from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
@@ -12,6 +13,7 @@ import llm
 # Import main script logic
 import main
 from config import (
+    APPLESCRIPTS_DIR,
     CONFIG_PATH,
     DAYS_THRESHOLD,
     DEFAULT_REPLY,
@@ -98,12 +100,16 @@ class OutlookBotGUI(ctk.CTk):
         self.tab_view.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
         self.tab_view.add("Configuration")
         self.tab_view.add("System Prompt")
+        self.tab_view.add("CSV Outreach")
 
         # -- Tab: Configuration --
         self.setup_config_tab()
 
         # -- Tab: System Prompt --
         self.setup_prompt_tab()
+
+        # -- Tab: CSV Outreach --
+        self.setup_csv_tab()
 
         # --- Log Output ---
         self.log_lbl = ctk.CTkLabel(self, text="Console Output:", font=("Arial", 12, "bold"))
@@ -223,6 +229,158 @@ class OutlookBotGUI(ctk.CTk):
 
         self.txt_prompt = ctk.CTkTextbox(tab, wrap="word")
         self.txt_prompt.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+    def setup_csv_tab(self):
+        tab = self.tab_view.tab("CSV Outreach")
+        tab.grid_columnconfigure(1, weight=1)
+
+        # CSV File Upload
+        lbl_csv = ctk.CTkLabel(tab, text="CSV File:")
+        lbl_csv.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        
+        self.csv_file_path = ctk.CTkEntry(tab, width=400)
+        self.csv_file_path.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+        
+        self.btn_browse_csv = ctk.CTkButton(tab, text="Browse...", command=self.browse_csv_file, width=100)
+        self.btn_browse_csv.grid(row=0, column=2, padx=10, pady=10)
+
+        # Number of Contacts
+        lbl_contacts = ctk.CTkLabel(tab, text="Number of Contacts:")
+        lbl_contacts.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        
+        self.entry_num_contacts = ctk.CTkEntry(tab, width=100)
+        self.entry_num_contacts.insert(0, "5")
+        self.entry_num_contacts.grid(row=1, column=1, padx=10, pady=10, sticky="w")
+
+        # Status/Info Label
+        self.lbl_csv_status = ctk.CTkLabel(tab, text="No CSV file selected", text_color="gray")
+        self.lbl_csv_status.grid(row=2, column=0, columnspan=3, padx=10, pady=5, sticky="w")
+
+        # Process Button
+        self.btn_process_csv = ctk.CTkButton(
+            tab, 
+            text="Generate & Send Emails", 
+            command=self.process_csv_outreach,
+            fg_color="green",
+            hover_color="darkgreen",
+            width=200
+        )
+        self.btn_process_csv.grid(row=3, column=0, columnspan=3, padx=10, pady=20)
+
+    def browse_csv_file(self):
+        """Open file dialog to select CSV file."""
+        from tkinter import filedialog
+        filename = filedialog.askopenfilename(
+            title="Select CSV File",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if filename:
+            self.csv_file_path.delete(0, "end")
+            self.csv_file_path.insert(0, filename)
+            self.lbl_csv_status.configure(text=f"Selected: {filename}", text_color="green")
+
+    def process_csv_outreach(self):
+        """Process CSV file and generate emails."""
+        csv_path = self.csv_file_path.get().strip()
+        if not csv_path:
+            self.log("[Error] Please select a CSV file.\n")
+            self.lbl_csv_status.configure(text="Error: No CSV file selected", text_color="red")
+            return
+
+        try:
+            num_contacts = int(self.entry_num_contacts.get().strip())
+            if num_contacts <= 0:
+                raise ValueError("Number of contacts must be positive")
+        except ValueError as e:
+            self.log(f"[Error] Invalid number of contacts: {e}\n")
+            self.lbl_csv_status.configure(text=f"Error: {e}", text_color="red")
+            return
+
+        if not os.path.exists(csv_path):
+            self.log(f"[Error] CSV file not found: {csv_path}\n")
+            self.lbl_csv_status.configure(text="Error: File not found", text_color="red")
+            return
+
+        # Save config before processing
+        if not self.save_config():
+            return
+
+        self.log(f"\n[Info] Processing CSV outreach: {csv_path}\n")
+        self.log(f"[Info] Number of contacts to process: {num_contacts}\n")
+        self.lbl_csv_status.configure(text="Processing...", text_color="blue")
+
+        # Run in separate thread
+        threading.Thread(target=self.run_csv_outreach, args=(csv_path, num_contacts), daemon=True).start()
+
+    def run_csv_outreach(self, csv_path: str, num_contacts: int):
+        """Run CSV outreach processing in background thread."""
+        try:
+            # Import here to avoid circular imports
+            from csv_outreach import process_csv_outreach
+            import llm
+            import yaml
+            from outlook_client import OutlookClient
+            from config import CONFIG_PATH
+            
+            # Redirect stdout/stderr
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+            sys.stdout = StdoutRedirector(self.log_box)
+            sys.stderr = StdoutRedirector(self.log_box)
+
+            try:
+                # Load config
+                try:
+                    with open(CONFIG_PATH, "r") as f:
+                        config_data = yaml.safe_load(f) or {}
+                except FileNotFoundError:
+                    config_data = {}
+                
+                preferred_model = config_data.get("preferred_model", None)
+                salesforce_bcc = config_data.get("salesforce_bcc", "")
+                
+                # Initialize services
+                print("[Info] Initializing LLM service...")
+                llm_service = llm.LLMService()
+                
+                print("[Info] Initializing Outlook client...")
+                outlook_client = OutlookClient(APPLESCRIPTS_DIR)
+                outlook_client.activate_outlook()
+                
+                # Process CSV outreach
+                results = process_csv_outreach(
+                    csv_path=csv_path,
+                    num_contacts=num_contacts,
+                    llm_service=llm_service,
+                    outlook_client=outlook_client,
+                    preferred_model=preferred_model,
+                    salesforce_bcc=salesforce_bcc,
+                )
+                
+                # Update status
+                if results['successful'] > 0:
+                    success_msg = f"Success: {results['successful']}/{results['processed']} emails created"
+                    self.after(0, lambda: self.lbl_csv_status.configure(
+                        text=success_msg, 
+                        text_color="green"
+                    ))
+                else:
+                    error_msg = f"Failed: {results['failed']} errors. Check console for details."
+                    self.after(0, lambda: self.lbl_csv_status.configure(
+                        text=error_msg, 
+                        text_color="red"
+                    ))
+            finally:
+                sys.stdout = original_stdout
+                sys.stderr = original_stderr
+        except Exception as e:
+            self.after(0, lambda: self.lbl_csv_status.configure(
+                text=f"Error: {str(e)}", 
+                text_color="red"
+            ))
+            print(f"\n[Error] CSV outreach failed: {e}\n")
+            import traceback
+            traceback.print_exc()
 
     def _toggle_visibility(self, checkbox: ctk.CTkCheckBox, entry: ctk.CTkEntry) -> None:
         """Toggle password visibility for an entry field based on checkbox state."""
