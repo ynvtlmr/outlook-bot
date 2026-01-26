@@ -492,6 +492,55 @@ class LLMService:
 
         return {}
 
+    def generate_cold_outreach_email(self, system_prompt, preferred_model=None):
+        """
+        Generates a cold outreach email based on the system prompt.
+        This is different from generate_reply as it doesn't expect an existing email thread.
+        
+        Args:
+            system_prompt: The full system prompt including contact information and instructions
+            preferred_model: Optional model ID to use for generation
+            
+        Returns:
+            Generated email content or None if generation fails
+        """
+        if not self.available_models:
+            print("Error: No available models to generate email.")
+            return None
+
+        # For cold outreach, the system_prompt already contains all the instructions
+        # We just need to ask for the email content
+        prompt = f"{system_prompt}"
+
+        # Reorder models to try preferred_model first if specified
+        models_to_try = self._reorder_models(preferred_model)
+
+        for model_entry in models_to_try:
+            model_id = model_entry["id"]
+            provider = model_entry["provider"]
+
+            print(f"Attempting cold outreach generation with {provider}:{model_id}...")
+
+            try:
+                if provider == "gemini":
+                    result = self._generate_gemini(model_id, prompt)
+                elif provider == "openai":
+                    result = self._generate_openai(model_id, prompt)
+                elif provider == "openrouter":
+                    result = self._generate_openrouter(model_id, prompt)
+                else:
+                    continue
+
+                if result:
+                    print(f"✓ Selected model for cold outreach: {provider}:{model_id}")
+                    return result
+            except Exception as e:
+                print(f"  -> Failed with {model_id}: {e}")
+                continue
+
+        print("Error: All models failed to generate cold outreach email.")
+        return None
+
     def generate_thread_summary(self, thread_content, preferred_model=None):
         """
         Generates a concise, one-paragraph summary of an email thread.

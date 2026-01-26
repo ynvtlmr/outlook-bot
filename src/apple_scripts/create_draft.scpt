@@ -28,7 +28,7 @@ on run argv
     
     -- Set content using UI automation (similar to reply_to_message.scpt)
     try
-        if msgContent is not "" then
+        if msgContent is not "" and msgContent is not missing value then
             -- Convert HTML <br> to newlines for typing
             set AppleScript's text item delimiters to "<br>"
             set textItems to text items of msgContent

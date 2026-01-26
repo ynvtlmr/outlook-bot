@@ -75,10 +75,8 @@ Write ONLY the email body content. Do not include subject line or headers.
 Email:"""
 
     try:
-        # For cold outreach, we need to generate content directly, not as a reply
-        # Use generate_reply but with an empty email_body to indicate it's a new email
-        email_content = llm_service.generate_reply(
-            email_body="",  # Empty because this is cold outreach, not a reply
+        # For cold outreach, use the dedicated method
+        email_content = llm_service.generate_cold_outreach_email(
             system_prompt=enhanced_prompt,
             preferred_model=preferred_model,
         )
@@ -86,19 +84,35 @@ Email:"""
         if email_content:
             # Clean up the response - remove any markdown formatting or extra text
             email_content = email_content.strip()
-            # Remove common LLM artifacts
-            if email_content.startswith("Email:"):
-                email_content = email_content[6:].strip()
-            if email_content.startswith("Here's the email:"):
-                email_content = email_content[17:].strip()
+            
+            # Remove common LLM artifacts and prefixes
+            prefixes_to_remove = [
+                "Email:",
+                "Here's the email:",
+                "Here is the email:",
+                "Email body:",
+                "Email content:",
+                "Here's your email:",
+            ]
+            for prefix in prefixes_to_remove:
+                if email_content.startswith(prefix):
+                    email_content = email_content[len(prefix):].strip()
+            
+            # Remove markdown code blocks
             if email_content.startswith("```"):
-                # Remove markdown code blocks
                 lines = email_content.split('\n')
                 if lines[0].startswith('```'):
                     lines = lines[1:]
-                if lines[-1].strip() == '```':
+                if lines and lines[-1].strip() == '```':
                     lines = lines[:-1]
                 email_content = '\n'.join(lines).strip()
+            
+            # Final cleanup - remove any remaining markdown or formatting
+            email_content = email_content.strip()
+            
+            print(f"  -> Generated email content ({len(email_content)} chars): {email_content[:200]}...")
+        else:
+            print("  -> Warning: LLM returned empty content")
         
         return email_content
     except Exception as e:
@@ -139,7 +153,16 @@ def create_email_draft(
             return False
         
         # Format content for AppleScript (convert newlines to <br>)
+        # Ensure content is not empty
+        if not content or len(content.strip()) == 0:
+            print(f"  -> Error: Content is empty, cannot create draft")
+            return False
+        
         formatted_content = content.replace("\n", "<br>")
+        
+        # Debug: Print what we're sending to AppleScript
+        print(f"  -> Debug: Sending to AppleScript - Content length: {len(formatted_content)} chars")
+        print(f"  -> Debug: First 100 chars of formatted content: {formatted_content[:100]}")
         
         # Create draft using OutlookClient
         result = client.create_draft(
@@ -264,11 +287,19 @@ def process_csv_outreach(
             else:
                 subject = "Outreach"
             
+            # Validate email content before creating draft
+            if not email_content or len(email_content.strip()) == 0:
+                results["failed"] += 1
+                results["errors"].append(f"{account_name}: Generated email content is empty")
+                print(f"  -> Error: Generated email content is empty, skipping draft creation")
+                continue
+            
             # Create draft
             print(f"  -> Creating draft in Outlook...")
             print(f"  -> To: {email}")
             print(f"  -> Subject: {subject}")
             print(f"  -> Body length: {len(email_content)} characters")
+            print(f"  -> Body preview: {email_content[:150]}...")
             success = create_email_draft(
                 outlook_client,
                 email,
