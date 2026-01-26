@@ -145,21 +145,43 @@ def get_contact_email(contact: Dict[str, Any]) -> Optional[str]:
     Returns:
         Email address string or None
     """
-    # Try common email field names
+    import re
+    
+    # Email validation regex
+    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    
+    # Try common email field names first (most reliable)
     email_fields = ['eMail', 'Email', 'email', 'Email Address', 'email_address', 'E-mail']
     
     for field in email_fields:
         email = contact.get(field, '').strip()
-        if email and '@' in email:
-            return email
+        if email:
+            # Check if it's a valid email format
+            if email_pattern.match(email):
+                return email
+            # If field contains multiple emails or text, try to extract first valid email
+            # Look for email pattern in the string
+            matches = re.findall(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b', email)
+            if matches:
+                return matches[0]  # Return first valid email found
     
-    # Also check if any field contains an email pattern
+    # Last resort: check other fields but be very strict
     for key, value in contact.items():
-        if isinstance(value, str) and '@' in value and '.' in value:
-            # Simple email pattern check
-            parts = value.split('@')
-            if len(parts) == 2 and '.' in parts[1]:
-                return value.strip()
+        if not isinstance(value, str):
+            continue
+        value = value.strip()
+        if not value:
+            continue
+        
+        # Only check if it looks like it might be an email field
+        if 'mail' in key.lower() or 'contact' in key.lower() or 'address' in key.lower():
+            # Validate it's a proper email
+            if email_pattern.match(value):
+                return value
+            # Try to extract email from the value
+            matches = re.findall(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b', value)
+            if matches:
+                return matches[0]
     
     return None
 

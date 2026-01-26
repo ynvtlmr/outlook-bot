@@ -51,6 +51,9 @@ def generate_email_for_contact(
     # Get date context
     date_context = get_current_date_context()
     
+    # Extract contact name for personalization
+    contact_name = contact.get("Authorized Signatory", "") or contact.get("Account Name", "")
+    
     # Combine system prompt with contact information
     enhanced_prompt = f"""{date_context}
 
@@ -61,24 +64,47 @@ def generate_email_for_contact(
 TASK: Write a personalized cold outreach email to this contact. Use the information provided above to craft a relevant, personalized message. The email should be:
 - Short and to the point
 - Friendly but professional
-- Personalized based on the contact information
-- Focused on building a relationship and introducing Gen II's services
+- Personalized based on the contact information provided
+- Focused on building a relationship and introducing Gen II's services (Sensr Portal, Funded, Sensr Analytics, Databridge)
+- Reference specific details from the contact information when relevant
 
-Start the email with a greeting (e.g., "Hello [name]") and sign off with "Best, Itamar".
+Start the email with a greeting (e.g., "Hello [name]" or "Hello" if no name is available) and sign off with "Best, Itamar".
+
+Write ONLY the email body content. Do not include subject line or headers.
 
 Email:"""
 
     try:
-        # Generate email using LLM
+        # For cold outreach, we need to generate content directly, not as a reply
+        # Use generate_reply but with an empty email_body to indicate it's a new email
         email_content = llm_service.generate_reply(
-            email_body="",  # No existing thread for cold outreach
+            email_body="",  # Empty because this is cold outreach, not a reply
             system_prompt=enhanced_prompt,
             preferred_model=preferred_model,
         )
         
+        if email_content:
+            # Clean up the response - remove any markdown formatting or extra text
+            email_content = email_content.strip()
+            # Remove common LLM artifacts
+            if email_content.startswith("Email:"):
+                email_content = email_content[6:].strip()
+            if email_content.startswith("Here's the email:"):
+                email_content = email_content[17:].strip()
+            if email_content.startswith("```"):
+                # Remove markdown code blocks
+                lines = email_content.split('\n')
+                if lines[0].startswith('```'):
+                    lines = lines[1:]
+                if lines[-1].strip() == '```':
+                    lines = lines[:-1]
+                email_content = '\n'.join(lines).strip()
+        
         return email_content
     except Exception as e:
         print(f"  -> Error generating email for contact: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -103,22 +129,33 @@ def create_email_draft(
         True if draft was created successfully, False otherwise
     """
     try:
+        # Validate inputs
+        if not to_email or not to_email.strip():
+            print(f"  -> Error: Invalid email address: {to_email}")
+            return False
+        
+        if not content or not content.strip():
+            print(f"  -> Error: Email content is empty")
+            return False
+        
         # Format content for AppleScript (convert newlines to <br>)
         formatted_content = content.replace("\n", "<br>")
         
         # Create draft using OutlookClient
         result = client.create_draft(
-            to_email, subject, formatted_content, bcc_address=bcc_address if bcc_address else None
+            to_email.strip(), subject, formatted_content, bcc_address=bcc_address if bcc_address else None
         )
         
         if result and "Error" not in result:
-            print(f"  -> Draft created for {to_email}")
+            print(f"  -> Draft created successfully for {to_email}")
             return True
         else:
             print(f"  -> Failed to create draft for {to_email}: {result}")
             return False
     except Exception as e:
         print(f"  -> Error creating draft: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -192,11 +229,12 @@ def process_csv_outreach(
                 results["errors"].append(f"{account_name}: No email address")
                 continue
             
-            print(f"\n[{idx}/{len(contacts_to_process)}] Processing: {account_name} ({email})")
+            print(f"\n[{idx}/{len(contacts_to_process)}] Processing: {account_name}")
+            print(f"  -> Email address: {email}")
             results["processed"] += 1
             
             # Generate email
-            print("  -> Generating email...")
+            print("  -> Generating email content...")
             email_content = generate_email_for_contact(
                 contact, base_system_prompt, llm_service, preferred_model=preferred_model
             )
@@ -207,13 +245,30 @@ def process_csv_outreach(
                 print(f"  -> Error: Failed to generate email")
                 continue
             
-            # Create subject line (use Opportunity Name or Account Name)
-            subject = contact.get("Opportunity Name", contact.get("Account Name", "Outreach"))
-            if not subject:
+            print(f"  -> Email content generated ({len(email_content)} characters)")
+            print(f"  -> Preview: {email_content[:100]}...")
+            
+            # Create subject line - make it more meaningful
+            opportunity_name = contact.get("Opportunity Name", "")
+            account_name = contact.get("Account Name", "")
+            tech_solution = contact.get("Technology Solution", "")
+            
+            # Build a meaningful subject
+            if opportunity_name and opportunity_name != account_name:
+                subject = f"Re: {opportunity_name}"
+            elif account_name:
+                if tech_solution:
+                    subject = f"Re: {account_name} - {tech_solution}"
+                else:
+                    subject = f"Re: {account_name}"
+            else:
                 subject = "Outreach"
             
             # Create draft
-            print("  -> Creating draft in Outlook...")
+            print(f"  -> Creating draft in Outlook...")
+            print(f"  -> To: {email}")
+            print(f"  -> Subject: {subject}")
+            print(f"  -> Body length: {len(email_content)} characters")
             success = create_email_draft(
                 outlook_client,
                 email,
