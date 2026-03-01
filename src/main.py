@@ -356,110 +356,185 @@ def generate_thread_summaries(
         print("No summaries generated. Skipping document creation.")
 
 
-def main() -> None:
-    print("--- Outlook Bot Generic Scraper ---")
+def _setup() -> dict[str, Any] | None:
+    """Shared setup: initializes Outlook, loads config, and creates the LLM service.
 
+    Returns a dict with shared state, or None if setup failed.
+    """
+    print("--- Outlook Bot Setup ---")
+
+    # Initialize Client and Focus Outlook
+    client = OutlookClient(APPLESCRIPTS_DIR)
+    print("Launching/Focusing Outlook...")
+    client.activate_outlook()
+
+    # Wait for Outlook to load
+    if not wait_for_outlook_ready():
+        return None
+
+    # Load Config (Dynamically to catch GUI changes)
     try:
-        # 0. Initialize Client and Focus Outlook
-        client = OutlookClient(APPLESCRIPTS_DIR)
-        print("Launching/Focusing Outlook...")
-        client.activate_outlook()
+        with open(CONFIG_PATH, "r") as f:
+            config_data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        config_data = {}
+    except Exception as e:
+        print(f"Warning: Error loading config.yaml: {e}")
+        config_data = {}
 
-        # 0.5 Wait for Outlook to load
-        if not wait_for_outlook_ready():
-            return
+    days_threshold = config_data.get("days_threshold", 5)
+    preferred_model = config_data.get("preferred_model", None)
+    salesforce_bcc = config_data.get("salesforce_bcc", "")
+    cold_outreach_enabled = config_data.get("cold_outreach_enabled", False)
+    cold_outreach_csv_path = config_data.get("cold_outreach_csv_path", "")
+    cold_outreach_daily_limit = config_data.get("cold_outreach_daily_limit", 10)
+    print(
+        f"Configuration Loaded: Days Threshold={days_threshold}, "
+        f"Preferred Model={preferred_model}, BCC={salesforce_bcc}, "
+        f"Cold Outreach={'ON' if cold_outreach_enabled else 'OFF'}"
+    )
 
-        # 0.6 Load Config (Dynamically to catch GUI changes)
-        try:
-            with open(CONFIG_PATH, "r") as f:
-                config_data = yaml.safe_load(f) or {}
-        except FileNotFoundError:
-            config_data = {}
-        except Exception as e:
-            print(f"Warning: Error loading config.yaml: {e}")
-            config_data = {}
+    # Load System Prompt and Date Context
+    base_system_prompt = load_system_prompt()
+    date_context = get_current_date_context()
+    combined_system_prompt = f"{date_context}\n\n{base_system_prompt}"
 
-        days_threshold = config_data.get("days_threshold", 5)
-        preferred_model = config_data.get("preferred_model", None)
-        salesforce_bcc = config_data.get("salesforce_bcc", "")
-        cold_outreach_enabled = config_data.get("cold_outreach_enabled", False)
-        cold_outreach_csv_path = config_data.get("cold_outreach_csv_path", "")
-        cold_outreach_daily_limit = config_data.get("cold_outreach_daily_limit", 10)
-        print(
-            f"Configuration Loaded: Days Threshold={days_threshold}, "
-            f"Preferred Model={preferred_model}, BCC={salesforce_bcc}, "
-            f"Cold Outreach={'ON' if cold_outreach_enabled else 'OFF'}"
+    print(f"System Prompt Context: {date_context}")
+
+    # Initialize LLM Service (Detects models)
+    try:
+        llm_service = llm.LLMService()
+    except Exception as e:
+        print(f"Error initializing LLM Service: {e}")
+        return None
+
+    return {
+        "client": client,
+        "config_data": config_data,
+        "days_threshold": days_threshold,
+        "preferred_model": preferred_model,
+        "salesforce_bcc": salesforce_bcc,
+        "cold_outreach_enabled": cold_outreach_enabled,
+        "cold_outreach_csv_path": cold_outreach_csv_path,
+        "cold_outreach_daily_limit": cold_outreach_daily_limit,
+        "combined_system_prompt": combined_system_prompt,
+        "llm_service": llm_service,
+    }
+
+
+def _do_follow_up(ctx: dict[str, Any]) -> None:
+    """Execute the flagged-email follow-up logic using an already-initialised context."""
+    client = ctx["client"]
+    days_threshold = ctx["days_threshold"]
+    preferred_model = ctx["preferred_model"]
+    salesforce_bcc = ctx["salesforce_bcc"]
+    combined_system_prompt = ctx["combined_system_prompt"]
+    llm_service = ctx["llm_service"]
+
+    # 1. Scrape Flagged
+    print("\n" + "=" * 30 + "\n")
+    flagged_threads = run_scraper(mode="flagged")
+
+    if flagged_threads:
+        # 2. Process Active Flags
+        print("\n--- Processing Active Flags ---")
+
+        candidates = filter_threads_for_replies(flagged_threads, days_threshold)
+        process_replies(
+            candidates,
+            client,
+            combined_system_prompt,
+            llm_service,
+            preferred_model=preferred_model,
+            salesforce_bcc=salesforce_bcc,
         )
 
-        # Load System Prompt and Date Context
-        base_system_prompt = load_system_prompt()
-        date_context = get_current_date_context()
-        combined_system_prompt = f"{date_context}\n\n{base_system_prompt}"
-
-        print(f"System Prompt Context: {date_context}")
-
-        # Initialize LLM Service (Detects models)
-        try:
-            llm_service = llm.LLMService()
-        except Exception as e:
-            print(f"Error initializing LLM Service: {e}")
-            return
-
-        # 1. Scrape Flagged
+        # Generate summaries only for threads that need replies (deduplicated)
         print("\n" + "=" * 30 + "\n")
-        flagged_threads = run_scraper(mode="flagged")
+        threads_needing_replies = []
+        seen_ids = set()
+        for item in candidates:
+            thread = item["thread"]
+            thread_id = id(thread)
+            if thread_id not in seen_ids:
+                seen_ids.add(thread_id)
+                threads_needing_replies.append(thread)
+        generate_thread_summaries(threads_needing_replies, llm_service, preferred_model)
+    else:
+        print("No flagged threads found.")
 
-        if flagged_threads:
-            # 2. Process Active Flags
-            print("\n--- Processing Active Flags ---")
 
-            candidates = filter_threads_for_replies(flagged_threads, days_threshold)
-            process_replies(
-                candidates,
-                client,
-                combined_system_prompt,
-                llm_service,
+def _do_cold_outreach(ctx: dict[str, Any]) -> None:
+    """Execute the cold outreach logic using an already-initialised context."""
+    client = ctx["client"]
+    preferred_model = ctx["preferred_model"]
+    salesforce_bcc = ctx["salesforce_bcc"]
+    llm_service = ctx["llm_service"]
+    cold_outreach_enabled = ctx["cold_outreach_enabled"]
+    cold_outreach_csv_path = ctx["cold_outreach_csv_path"]
+    cold_outreach_daily_limit = ctx["cold_outreach_daily_limit"]
+
+    if not cold_outreach_enabled:
+        print("Cold outreach is disabled in configuration. Skipping.")
+        return
+
+    try:
+        cold_prompt = ""
+        if os.path.exists(COLD_OUTREACH_PROMPT_PATH):
+            with open(COLD_OUTREACH_PROMPT_PATH, "r") as f:
+                cold_prompt = f.read()
+        if not cold_prompt:
+            print("Warning: Cold outreach prompt is empty. Skipping cold outreach.")
+        else:
+            process_cold_outreach(
+                client=client,
+                llm_service=llm_service,
+                cold_prompt=cold_prompt,
                 preferred_model=preferred_model,
+                csv_path=cold_outreach_csv_path,
+                daily_limit=cold_outreach_daily_limit,
                 salesforce_bcc=salesforce_bcc,
             )
+    except Exception as e:
+        print(f"Error during cold outreach: {e}")
+        traceback.print_exc()
 
-            # Generate summaries only for threads that need replies (deduplicated)
-            print("\n" + "=" * 30 + "\n")
-            threads_needing_replies = []
-            seen_ids = set()
-            for item in candidates:
-                thread = item["thread"]
-                thread_id = id(thread)
-                if thread_id not in seen_ids:
-                    seen_ids.add(thread_id)
-                    threads_needing_replies.append(thread)
-            generate_thread_summaries(threads_needing_replies, llm_service, preferred_model)
-        else:
-            print("No flagged threads found.")
 
-        # 3. Cold Outreach (runs regardless of flagged threads)
-        if cold_outreach_enabled:
-            try:
-                cold_prompt = ""
-                if os.path.exists(COLD_OUTREACH_PROMPT_PATH):
-                    with open(COLD_OUTREACH_PROMPT_PATH, "r") as f:
-                        cold_prompt = f.read()
-                if not cold_prompt:
-                    print("Warning: Cold outreach prompt is empty. Skipping cold outreach.")
-                else:
-                    process_cold_outreach(
-                        client=client,
-                        llm_service=llm_service,
-                        cold_prompt=cold_prompt,
-                        preferred_model=preferred_model,
-                        csv_path=cold_outreach_csv_path,
-                        daily_limit=cold_outreach_daily_limit,
-                        salesforce_bcc=salesforce_bcc,
-                    )
-            except Exception as e:
-                print(f"Error during cold outreach: {e}")
-                traceback.print_exc()
+def run_follow_up() -> None:
+    """Run only the flagged-email follow-up step (scrape, reply, summarise)."""
+    print("--- Outlook Bot: Follow Up ---")
+    try:
+        ctx = _setup()
+        if ctx is None:
+            return
+        _do_follow_up(ctx)
+    except Exception as e:
+        print(f"Error during execution: {e}")
+        traceback.print_exc()
 
+
+def run_cold_outreach() -> None:
+    """Run only the cold outreach step."""
+    print("--- Outlook Bot: Cold Outreach ---")
+    try:
+        ctx = _setup()
+        if ctx is None:
+            return
+        _do_cold_outreach(ctx)
+    except Exception as e:
+        print(f"Error during execution: {e}")
+        traceback.print_exc()
+
+
+def main() -> None:
+    """Run both follow-up and cold outreach (original behaviour)."""
+    print("--- Outlook Bot: Run All ---")
+    try:
+        ctx = _setup()
+        if ctx is None:
+            return
+        _do_follow_up(ctx)
+        _do_cold_outreach(ctx)
     except Exception as e:
         print(f"Error during execution: {e}")
         traceback.print_exc()

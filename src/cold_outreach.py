@@ -3,6 +3,7 @@ import os
 from typing import Any
 
 import llm
+from config import USER_DATA_DIR
 from outlook_client import OutlookClient
 
 GENERIC_PREFIXES = {"info", "news", "contact", "support", "admin"}
@@ -90,6 +91,10 @@ def process_cold_outreach(
     4. Generate outreach drafts for un-contacted leads up to daily_limit
     """
     print("\n--- Cold Outreach ---")
+
+    # Resolve relative paths against the project root (USER_DATA_DIR)
+    if csv_path and not os.path.isabs(csv_path):
+        csv_path = os.path.join(USER_DATA_DIR, csv_path)
 
     if not csv_path or not os.path.exists(csv_path):
         print(f"  -> CSV file not found: {csv_path}")

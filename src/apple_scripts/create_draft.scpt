@@ -17,6 +17,9 @@ on run argv
             make new bcc recipient at newMsg with properties {email address:{address:bccAddress}}
         end if
 
+        try
+            set todo flag of newMsg to follow up
+        end try
         open newMsg -- Opens the draft for review instead of trying to save silently
     end tell
 

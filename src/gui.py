@@ -76,10 +76,32 @@ class OutlookBotGUI(ctk.CTk):
         self.control_frame = ctk.CTkFrame(self)
         self.control_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
 
-        self.btn_start = ctk.CTkButton(
-            self.control_frame, text="START BOT", command=self.start_bot, fg_color="green", hover_color="darkgreen"
+        self.btn_follow_up = ctk.CTkButton(
+            self.control_frame,
+            text="Follow Up",
+            command=lambda: self.start_bot(main.run_follow_up),
+            fg_color="green",
+            hover_color="darkgreen",
         )
-        self.btn_start.pack(side="left", padx=10, pady=10)
+        self.btn_follow_up.pack(side="left", padx=10, pady=10)
+
+        self.btn_cold_outreach = ctk.CTkButton(
+            self.control_frame,
+            text="Cold Outreach",
+            command=lambda: self.start_bot(main.run_cold_outreach),
+            fg_color="#1f538d",
+            hover_color="#163d6a",
+        )
+        self.btn_cold_outreach.pack(side="left", padx=10, pady=10)
+
+        self.btn_run_all = ctk.CTkButton(
+            self.control_frame,
+            text="Run All",
+            command=lambda: self.start_bot(main.main),
+            fg_color="green",
+            hover_color="darkgreen",
+        )
+        self.btn_run_all.pack(side="left", padx=10, pady=10)
 
         self.btn_stop = ctk.CTkButton(
             self.control_frame,
@@ -484,9 +506,12 @@ class OutlookBotGUI(ctk.CTk):
             self.log("[Info] All settings saved successfully.\n")
         return success
 
-    def start_bot(self):
+    def start_bot(self, target_fn: Callable = None):
         if self.is_running:
             return
+
+        if target_fn is None:
+            target_fn = main.main
 
         # Save before run
         # Wait, if we save, we might need to ensure the files exist for main.py to read?
@@ -495,14 +520,16 @@ class OutlookBotGUI(ctk.CTk):
             return
 
         self.is_running = True
-        self.btn_start.configure(state="disabled")
+        self.btn_follow_up.configure(state="disabled")
+        self.btn_cold_outreach.configure(state="disabled")
+        self.btn_run_all.configure(state="disabled")
         self.btn_stop.configure(state="normal")
         self.log("\n" + "=" * 30 + "\nStarting Outlook Bot...\n" + "=" * 30 + "\n")
 
         # Run in a separate thread to keep GUI responsive
-        threading.Thread(target=self.run_process, daemon=True).start()
+        threading.Thread(target=self.run_process, args=(target_fn,), daemon=True).start()
 
-    def run_process(self):
+    def run_process(self, target_fn: Callable):
         # Redirect stdout/stderr
         original_stdout = sys.stdout
         original_stderr = sys.stderr
@@ -511,9 +538,8 @@ class OutlookBotGUI(ctk.CTk):
         sys.stderr = StdoutRedirector(self.log_box)
 
         try:
-            # Execute the main script logic
-            # main.main() does its work and returns.
-            main.main()
+            # Execute the target function
+            target_fn()
 
         except Exception as e:
             print(f"\n[Error during execution: {e}]")
@@ -530,7 +556,9 @@ class OutlookBotGUI(ctk.CTk):
 
     def process_finished(self):
         self.is_running = False
-        self.btn_start.configure(state="normal")
+        self.btn_follow_up.configure(state="normal")
+        self.btn_cold_outreach.configure(state="normal")
+        self.btn_run_all.configure(state="normal")
         self.btn_stop.configure(state="disabled")
         self.log("\n[Process finished]\n")
 
