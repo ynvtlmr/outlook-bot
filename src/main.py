@@ -423,9 +423,16 @@ def main() -> None:
                 salesforce_bcc=salesforce_bcc,
             )
 
-            # Generate summaries only for threads that need replies
+            # Generate summaries only for threads that need replies (deduplicated)
             print("\n" + "=" * 30 + "\n")
-            threads_needing_replies = [item["thread"] for item in candidates]
+            threads_needing_replies = []
+            seen_ids = set()
+            for item in candidates:
+                thread = item["thread"]
+                thread_id = id(thread)
+                if thread_id not in seen_ids:
+                    seen_ids.add(thread_id)
+                    threads_needing_replies.append(thread)
             generate_thread_summaries(threads_needing_replies, llm_service, preferred_model)
         else:
             print("No flagged threads found.")

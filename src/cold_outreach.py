@@ -29,9 +29,6 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
             break
         except UnicodeDecodeError:
             continue
-        except Exception as e:
-            print(f"  -> Error reading CSV: {e}")
-            return []
 
     if not rows:
         print("  -> CSV is empty or could not be read.")

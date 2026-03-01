@@ -413,7 +413,11 @@ class OutlookBotGUI(ctk.CTk):
             preferred_model = self.combo_model.get()
             cold_outreach_enabled = bool(self.switch_cold_outreach.get())
             cold_outreach_csv_path = self.entry_csv_path.get().strip()
-            cold_outreach_daily_limit = int(self.entry_daily_limit.get())
+            try:
+                cold_outreach_daily_limit = int(self.entry_daily_limit.get().strip())
+            except ValueError:
+                self.log("[Warning] Invalid daily limit. Using default.\n")
+                cold_outreach_daily_limit = COLD_OUTREACH_DAILY_LIMIT
 
             # Update only the fields we manage, preserve others
             data = existing_data.copy()
