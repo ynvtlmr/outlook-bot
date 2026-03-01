@@ -12,6 +12,9 @@ import llm
 # Import main script logic
 import main
 from config import (
+    COLD_OUTREACH_DAILY_LIMIT,
+    COLD_OUTREACH_ENABLED,
+    COLD_OUTREACH_PROMPT_PATH,
     CONFIG_PATH,
     DAYS_THRESHOLD,
     DEFAULT_REPLY,
@@ -98,12 +101,16 @@ class OutlookBotGUI(ctk.CTk):
         self.tab_view.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
         self.tab_view.add("Configuration")
         self.tab_view.add("System Prompt")
+        self.tab_view.add("Cold Outreach")
 
         # -- Tab: Configuration --
         self.setup_config_tab()
 
         # -- Tab: System Prompt --
         self.setup_prompt_tab()
+
+        # -- Tab: Cold Outreach --
+        self.setup_cold_outreach_tab()
 
         # --- Log Output ---
         self.log_lbl = ctk.CTkLabel(self, text="Console Output:", font=("Arial", 12, "bold"))
@@ -224,6 +231,56 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_prompt = ctk.CTkTextbox(tab, wrap="word")
         self.txt_prompt.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
+    def setup_cold_outreach_tab(self):
+        tab = self.tab_view.tab("Cold Outreach")
+        tab.grid_columnconfigure(1, weight=1)
+        tab.grid_rowconfigure(4, weight=1)
+
+        # Enable/Disable Toggle
+        lbl_enable = ctk.CTkLabel(tab, text="Enable:")
+        lbl_enable.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self.switch_cold_outreach = ctk.CTkSwitch(tab, text="Cold Outreach Enabled")
+        self.switch_cold_outreach.grid(row=0, column=1, padx=10, pady=10, sticky="w")
+
+        # CSV File Path
+        lbl_csv = ctk.CTkLabel(tab, text="CSV File:")
+        lbl_csv.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+        csv_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        csv_frame.grid(row=1, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        csv_frame.grid_columnconfigure(0, weight=1)
+
+        self.entry_csv_path = ctk.CTkEntry(csv_frame, width=400)
+        self.entry_csv_path.grid(row=0, column=0, sticky="ew")
+
+        self.btn_browse_csv = ctk.CTkButton(
+            csv_frame, text="Browse", command=self.browse_csv, width=80, fg_color="#333333"
+        )
+        self.btn_browse_csv.grid(row=0, column=1, padx=(10, 0))
+
+        # Daily Limit
+        lbl_limit = ctk.CTkLabel(tab, text="Daily Limit:")
+        lbl_limit.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        self.entry_daily_limit = ctk.CTkEntry(tab, width=100)
+        self.entry_daily_limit.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+
+        # Cold Outreach Prompt
+        lbl_prompt = ctk.CTkLabel(tab, text="Outreach Prompt:")
+        lbl_prompt.grid(row=3, column=0, padx=10, pady=(10, 0), sticky="nw")
+        self.txt_cold_prompt = ctk.CTkTextbox(tab, wrap="word")
+        self.txt_cold_prompt.grid(row=4, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+
+    def browse_csv(self):
+        from tkinter import filedialog
+
+        path = filedialog.askopenfilename(
+            title="Select Salesforce CSV Export",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+        )
+        if path:
+            self.entry_csv_path.delete(0, "end")
+            self.entry_csv_path.insert(0, path)
+
     def _toggle_visibility(self, checkbox: ctk.CTkCheckBox, entry: ctk.CTkEntry) -> None:
         """Toggle password visibility for an entry field based on checkbox state."""
         entry.configure(show="" if checkbox.get() else "*")
@@ -306,6 +363,28 @@ class OutlookBotGUI(ctk.CTk):
         except OSError as e:
             self.log(f"[Error] Failed to load system_prompt.txt: {e}\n")
 
+        # 5b. Load Cold Outreach settings
+        if data.get("cold_outreach_enabled", COLD_OUTREACH_ENABLED):
+            self.switch_cold_outreach.select()
+        else:
+            self.switch_cold_outreach.deselect()
+
+        self.entry_csv_path.delete(0, "end")
+        self.entry_csv_path.insert(0, str(data.get("cold_outreach_csv_path", "")))
+
+        self.entry_daily_limit.delete(0, "end")
+        self.entry_daily_limit.insert(0, str(data.get("cold_outreach_daily_limit", COLD_OUTREACH_DAILY_LIMIT)))
+
+        # Load Cold Outreach Prompt
+        try:
+            if os.path.exists(COLD_OUTREACH_PROMPT_PATH):
+                with open(COLD_OUTREACH_PROMPT_PATH, "r") as f:
+                    cold_content = f.read()
+                self.txt_cold_prompt.delete("0.0", "end")
+                self.txt_cold_prompt.insert("0.0", cold_content)
+        except OSError as e:
+            self.log(f"[Error] Failed to load cold_outreach_prompt.txt: {e}\n")
+
         # 6. Auto-Test Connections if keys exist
         if self.entry_api_key.get().strip():
             self.test_gemini()
@@ -332,6 +411,9 @@ class OutlookBotGUI(ctk.CTk):
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
             salesforce_bcc = self.entry_bcc.get().strip()
             preferred_model = self.combo_model.get()
+            cold_outreach_enabled = bool(self.switch_cold_outreach.get())
+            cold_outreach_csv_path = self.entry_csv_path.get().strip()
+            cold_outreach_daily_limit = int(self.entry_daily_limit.get())
 
             # Update only the fields we manage, preserve others
             data = existing_data.copy()
@@ -341,6 +423,9 @@ class OutlookBotGUI(ctk.CTk):
                     "default_reply": default_reply,
                     "salesforce_bcc": salesforce_bcc,
                     "preferred_model": preferred_model,
+                    "cold_outreach_enabled": cold_outreach_enabled,
+                    "cold_outreach_csv_path": cold_outreach_csv_path,
+                    "cold_outreach_daily_limit": cold_outreach_daily_limit,
                 }
             )
             # Note: disable_ssl_verify is now hardcoded in llm.py and not stored in config.yaml
@@ -380,6 +465,15 @@ class OutlookBotGUI(ctk.CTk):
                 f.write(prompt_content)
         except OSError as e:
             self.log(f"[Error] Failed to save system_prompt.txt: {e}\n")
+            success = False
+
+        # 4. Save Cold Outreach Prompt
+        try:
+            cold_prompt_content = self.txt_cold_prompt.get("0.0", "end").strip()
+            with open(COLD_OUTREACH_PROMPT_PATH, "w") as f:
+                f.write(cold_prompt_content)
+        except OSError as e:
+            self.log(f"[Error] Failed to save cold_outreach_prompt.txt: {e}\n")
             success = False
 
         if success:

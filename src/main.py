@@ -9,7 +9,8 @@ from typing import Any
 import yaml
 
 import llm
-from config import APPLESCRIPTS_DIR, CONFIG_PATH, OUTPUT_DIR, SYSTEM_PROMPT_PATH
+from cold_outreach import process_cold_outreach
+from config import APPLESCRIPTS_DIR, COLD_OUTREACH_PROMPT_PATH, CONFIG_PATH, OUTPUT_DIR, SYSTEM_PROMPT_PATH
 from date_utils import get_current_date_context, get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
@@ -381,22 +382,14 @@ def main() -> None:
         days_threshold = config_data.get("days_threshold", 5)
         preferred_model = config_data.get("preferred_model", None)
         salesforce_bcc = config_data.get("salesforce_bcc", "")
+        cold_outreach_enabled = config_data.get("cold_outreach_enabled", False)
+        cold_outreach_csv_path = config_data.get("cold_outreach_csv_path", "")
+        cold_outreach_daily_limit = config_data.get("cold_outreach_daily_limit", 10)
         print(
             f"Configuration Loaded: Days Threshold={days_threshold}, "
-            f"Preferred Model={preferred_model}, BCC={salesforce_bcc}"
+            f"Preferred Model={preferred_model}, BCC={salesforce_bcc}, "
+            f"Cold Outreach={'ON' if cold_outreach_enabled else 'OFF'}"
         )
-
-        # 1. Scrape Flagged
-        print("\n" + "=" * 30 + "\n")
-        flagged_threads = run_scraper(mode="flagged")
-
-        if not flagged_threads:
-            print("No flagged threads found.")
-            return
-
-        # 2. Process Active Flags
-        print("\n--- Processing Active Flags ---")
-        # client already initialized
 
         # Load System Prompt and Date Context
         base_system_prompt = load_system_prompt()
@@ -412,19 +405,53 @@ def main() -> None:
             print(f"Error initializing LLM Service: {e}")
             return
 
-        candidates = filter_threads_for_replies(flagged_threads, days_threshold)
-        process_replies(
-            candidates,
-            client,
-            combined_system_prompt,
-            llm_service,
-            preferred_model=preferred_model,
-            salesforce_bcc=salesforce_bcc,
-        )
-
-        # Generate summaries for all flagged threads
+        # 1. Scrape Flagged
         print("\n" + "=" * 30 + "\n")
-        generate_thread_summaries(flagged_threads, llm_service, preferred_model)
+        flagged_threads = run_scraper(mode="flagged")
+
+        if flagged_threads:
+            # 2. Process Active Flags
+            print("\n--- Processing Active Flags ---")
+
+            candidates = filter_threads_for_replies(flagged_threads, days_threshold)
+            process_replies(
+                candidates,
+                client,
+                combined_system_prompt,
+                llm_service,
+                preferred_model=preferred_model,
+                salesforce_bcc=salesforce_bcc,
+            )
+
+            # Generate summaries only for threads that need replies
+            print("\n" + "=" * 30 + "\n")
+            threads_needing_replies = [item["thread"] for item in candidates]
+            generate_thread_summaries(threads_needing_replies, llm_service, preferred_model)
+        else:
+            print("No flagged threads found.")
+
+        # 3. Cold Outreach (runs regardless of flagged threads)
+        if cold_outreach_enabled:
+            try:
+                cold_prompt = ""
+                if os.path.exists(COLD_OUTREACH_PROMPT_PATH):
+                    with open(COLD_OUTREACH_PROMPT_PATH, "r") as f:
+                        cold_prompt = f.read()
+                if not cold_prompt:
+                    print("Warning: Cold outreach prompt is empty. Skipping cold outreach.")
+                else:
+                    process_cold_outreach(
+                        client=client,
+                        llm_service=llm_service,
+                        cold_prompt=cold_prompt,
+                        preferred_model=preferred_model,
+                        csv_path=cold_outreach_csv_path,
+                        daily_limit=cold_outreach_daily_limit,
+                        salesforce_bcc=salesforce_bcc,
+                    )
+            except Exception as e:
+                print(f"Error during cold outreach: {e}")
+                traceback.print_exc()
 
     except Exception as e:
         print(f"Error during execution: {e}")
