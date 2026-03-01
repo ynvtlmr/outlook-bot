@@ -103,7 +103,12 @@ def process_cold_outreach(
     # 2. Sort: personal emails first, generic last
     leads.sort(key=lambda lead: is_generic_email(lead["email"]))
 
-    # 3. Check Sent Items and collect un-contacted leads
+    # 3. Fetch all sent recipients in one batch call (much faster than per-lead)
+    print("  -> Fetching sent recipients from Outlook...")
+    sent_recipients = client.get_sent_recipients()
+    print(f"  -> Found {len(sent_recipients)} unique sent recipients.")
+
+    # 4. Check against sent recipients and collect un-contacted leads
     drafts_created = 0
     already_contacted = 0
     skipped_no_email = 0
@@ -120,8 +125,8 @@ def process_cold_outreach(
 
         print(f"\n  Checking: {email} ({lead['account_name']})")
 
-        # Check if already emailed
-        if client.check_sent_to(email):
+        # Check if already emailed (fast in-memory set lookup)
+        if email in sent_recipients:
             print(f"    -> Already contacted. Skipping.")
             already_contacted += 1
             continue

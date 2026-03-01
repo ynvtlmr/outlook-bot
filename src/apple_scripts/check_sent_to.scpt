@@ -1,20 +1,26 @@
+-- Returns a newline-separated list of all recipient email addresses from Sent Items.
+-- Used to check who has already been emailed (much faster than per-lead lookups).
 on run argv
-	set targetEmail to item 1 of argv
-
 	tell application "Microsoft Outlook"
 		try
 			set sentFolder to folder "Sent Items" of default account
-			set sentMessages to messages of sentFolder
+			set allMessages to messages of sentFolder
+			set msgCount to count of allMessages
+			-- Cap to last 1000 messages for performance
+			if msgCount > 1000 then
+				set msgCount to 1000
+			end if
 
-			repeat with msg in sentMessages
+			set addressList to ""
+
+			repeat with i from 1 to msgCount
 				try
+					set msg to item i of allMessages
 					set toRecips to to recipients of msg
 					repeat with r in toRecips
 						try
 							set recipAddr to address of (get email address of r)
-							if recipAddr is equal to targetEmail then
-								return "true"
-							end if
+							set addressList to addressList & recipAddr & linefeed
 						end try
 					end repeat
 
@@ -22,27 +28,15 @@ on run argv
 					repeat with r in ccRecips
 						try
 							set recipAddr to address of (get email address of r)
-							if recipAddr is equal to targetEmail then
-								return "true"
-							end if
-						end try
-					end repeat
-
-					set bccRecips to bcc recipients of msg
-					repeat with r in bccRecips
-						try
-							set recipAddr to address of (get email address of r)
-							if recipAddr is equal to targetEmail then
-								return "true"
-							end if
+							set addressList to addressList & recipAddr & linefeed
 						end try
 					end repeat
 				end try
 			end repeat
 
-			return "false"
+			return addressList
 		on error errMsg
-			return "false"
+			return ""
 		end try
 	end tell
 end run

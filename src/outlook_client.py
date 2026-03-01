@@ -47,13 +47,15 @@ class OutlookClient:
             args.append(bcc_address)
         return self._run_script("create_draft.scpt", args)
 
-    def check_sent_to(self, email: str) -> bool:
+    def get_sent_recipients(self) -> set[str]:
         """
-        Checks Outlook Sent Items for any message sent to the given email address.
-        Returns True if a match is found.
+        Fetches all recipient email addresses from Outlook Sent Items (last 1000 messages).
+        Returns a set of lowercase email addresses for fast lookup.
         """
-        result = self._run_script("check_sent_to.scpt", [email])
-        return result is not None and result.strip().lower() == "true"
+        result = self._run_script("check_sent_to.scpt")
+        if not result:
+            return set()
+        return {addr.strip().lower() for addr in result.splitlines() if addr.strip()}
 
     def reply_to_message(
         self, message_id: str, content: Optional[str] = None, bcc_address: Optional[str] = None
