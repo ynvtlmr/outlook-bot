@@ -1,5 +1,6 @@
 import csv
 import os
+from datetime import datetime
 from typing import Any
 
 import llm
@@ -165,6 +166,21 @@ def process_cold_outreach(
         result = client.create_draft(email, subject, formatted_content, bcc_address=salesforce_bcc)
         print(f"    -> {result}")
         drafts_created += 1
+
+        # Generate SF Note
+        today = datetime.now()
+        date_str = f"{today.month}/{today.day}/{str(today.year)[-2:]}"
+        sf_note = llm_service.generate_reply(
+            f"Outreach sent to {lead['account_name']} ({email}) about {products_str}.\n"
+            f"Notes: {lead['notes']}\n\n"
+            f"Email content:\n{reply}",
+            f"Write a one-sentence Salesforce note starting with {date_str}. "
+            f"Written from Gen II's perspective using 'we'. "
+            f"TL;DR style, punchy, straight to the point. Just the note, nothing else.",
+            preferred_model=preferred_model,
+        )
+        if sf_note:
+            print(f"\n    SF Note: {sf_note}")
 
     # Summary
     print(f"\n--- Cold Outreach Summary ---")
