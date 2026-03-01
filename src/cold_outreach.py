@@ -49,6 +49,7 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
         for email in emails:
             email_lower = email.lower()
             product = (row.get("Technology Solution") or "").strip()
+            opportunity = (row.get("Opportunity Name") or "").strip()
             account = (row.get("Account Name") or "").strip()
             contact = (row.get("Authorized Signatory") or "").strip()
             latest_interaction = (row.get("Pipeline Comments/Next Steps") or "").strip()
@@ -60,6 +61,8 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
                 existing = email_map[email_lower]
                 if product and product not in existing["products"]:
                     existing["products"].append(product)
+                if opportunity and opportunity not in existing["opportunities"]:
+                    existing["opportunities"].append(opportunity)
                 # Merge latest interaction
                 if latest_interaction and latest_interaction not in existing["latest_interaction"]:
                     existing["latest_interaction"] += f"; {latest_interaction}" if existing["latest_interaction"] else latest_interaction
@@ -74,6 +77,7 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
                     "account_name": account,
                     "contact_name": contact,
                     "products": [product] if product else [],
+                    "opportunities": [opportunity] if opportunity else [],
                     "latest_interaction": latest_interaction,
                     "description": description,
                     "account_description": account_description,
@@ -192,7 +196,8 @@ def process_cold_outreach(
             preferred_model=preferred_model,
         )
         if sf_note:
-            print(f"\n    SF Note: {sf_note}")
+            opps = ", ".join(lead["opportunities"]) if lead["opportunities"] else lead["account_name"]
+            print(f"\n    [{opps}] {sf_note}")
 
     # Summary
     print(f"\n--- Cold Outreach Summary ---")
