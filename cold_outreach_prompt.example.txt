@@ -25,7 +25,7 @@ Gen II offers four technology solutions under the Sensr brand:
 
 Personalization
 Use the lead context below to personalize your outreach. Reference the account name and relevant product(s).
-If notes or pipeline comments are available, use them to add context.
+If latest interaction or opportunity history is available, use them to add context and show awareness of the relationship.
 If multiple products apply, mention the primary one and briefly note the others.
 Keep the focus on what the product does for them, not feature lists.
 
@@ -34,4 +34,6 @@ Account: {account_name}
 Contact: {contact_name}
 Email: {email}
 Products: {products}
-Notes: {notes}
+Latest Interaction: {latest_interaction}
+Opportunity History: {description}
+Account Description: {account_description}

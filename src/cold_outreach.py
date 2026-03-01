@@ -51,23 +51,32 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
             product = (row.get("Technology Solution") or "").strip()
             account = (row.get("Account Name") or "").strip()
             contact = (row.get("Authorized Signatory") or "").strip()
-            notes = (row.get("Pipeline Comments/Next Steps") or "").strip()
+            latest_interaction = (row.get("Pipeline Comments/Next Steps") or "").strip()
+            description = (row.get("Description") or "").strip()
+            account_description = (row.get("Account Description") or "").strip()
 
             if email_lower in email_map:
                 # Append product if not already listed
                 existing = email_map[email_lower]
                 if product and product not in existing["products"]:
                     existing["products"].append(product)
-                # Merge notes
-                if notes and notes not in existing["notes"]:
-                    existing["notes"] += f"; {notes}" if existing["notes"] else notes
+                # Merge latest interaction
+                if latest_interaction and latest_interaction not in existing["latest_interaction"]:
+                    existing["latest_interaction"] += f"; {latest_interaction}" if existing["latest_interaction"] else latest_interaction
+                # Keep longest description
+                if len(description) > len(existing["description"]):
+                    existing["description"] = description
+                if len(account_description) > len(existing["account_description"]):
+                    existing["account_description"] = account_description
             else:
                 email_map[email_lower] = {
                     "email": email_lower,
                     "account_name": account,
                     "contact_name": contact,
                     "products": [product] if product else [],
-                    "notes": notes,
+                    "latest_interaction": latest_interaction,
+                    "description": description,
+                    "account_description": account_description,
                 }
 
     leads = list(email_map.values())
@@ -144,7 +153,9 @@ def process_cold_outreach(
             f"Contact: {lead['contact_name']}\n"
             f"Email: {email}\n"
             f"Products: {products_str}\n"
-            f"Notes: {lead['notes']}"
+            f"Latest Interaction: {lead['latest_interaction']}\n"
+            f"Opportunity History: {lead['description']}\n"
+            f"Account Description: {lead['account_description']}"
         )
 
         print(f"    -> Generating outreach email...")
@@ -172,7 +183,8 @@ def process_cold_outreach(
         date_str = f"{today.month}/{today.day}/{str(today.year)[-2:]}"
         sf_note = llm_service.generate_reply(
             f"Outreach sent to {lead['account_name']} ({email}) about {products_str}.\n"
-            f"Notes: {lead['notes']}\n\n"
+            f"Latest Interaction: {lead['latest_interaction']}\n"
+            f"Opportunity History: {lead['description']}\n\n"
             f"Email content:\n{reply}",
             f"Write a one-sentence Salesforce note starting with {date_str}. "
             f"Written from Gen II's perspective using 'we'. "
