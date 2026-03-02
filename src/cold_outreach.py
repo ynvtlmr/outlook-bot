@@ -50,6 +50,7 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
             email_lower = email.lower()
             product = (row.get("Technology Solution") or "").strip()
             opportunity = (row.get("Opportunity Name") or "").strip()
+            opportunity_id = (row.get("Opportunity ID") or "").strip()
             account = (row.get("Account Name") or "").strip()
             contact = (row.get("Authorized Signatory") or "").strip()
             latest_interaction = (row.get("Pipeline Comments/Next Steps") or "").strip()
@@ -63,6 +64,8 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
                     existing["products"].append(product)
                 if opportunity and opportunity not in existing["opportunities"]:
                     existing["opportunities"].append(opportunity)
+                if opportunity_id and opportunity_id not in existing["opportunity_ids"]:
+                    existing["opportunity_ids"].append(opportunity_id)
                 # Merge latest interaction
                 if latest_interaction and latest_interaction not in existing["latest_interaction"]:
                     existing["latest_interaction"] += f"; {latest_interaction}" if existing["latest_interaction"] else latest_interaction
@@ -78,6 +81,7 @@ def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
                     "contact_name": contact,
                     "products": [product] if product else [],
                     "opportunities": [opportunity] if opportunity else [],
+                    "opportunity_ids": [opportunity_id] if opportunity_id else [],
                     "latest_interaction": latest_interaction,
                     "description": description,
                     "account_description": account_description,
@@ -191,13 +195,16 @@ def process_cold_outreach(
             f"Opportunity History: {lead['description']}\n\n"
             f"Email content:\n{reply}",
             f"Write a one-sentence Salesforce note starting with {date_str}. "
-            f"Written from Gen II's perspective using 'we'. "
-            f"TL;DR style, punchy, straight to the point. Just the note, nothing else.",
+            f"TL;DR style, punchy, straight to the point. "
+            f"Drop the subject pronoun — say 'reached out' not 'we reached out', 'pushing' not 'we're pushing'. "
+            f"Just the note, nothing else.",
             preferred_model=preferred_model,
         )
         if sf_note:
             opps = ", ".join(lead["opportunities"]) if lead["opportunities"] else lead["account_name"]
-            print(f"\n    [{opps}] {sf_note}")
+            for oid in lead["opportunity_ids"]:
+                print(f"\n    https://gen2.lightning.force.com/lightning/r/Opportunity/{oid}/edit")
+            print(f"    [{opps}] {sf_note}")
 
     # Summary
     print(f"\n--- Cold Outreach Summary ---")
