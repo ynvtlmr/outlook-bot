@@ -431,15 +431,23 @@ def _do_follow_up(ctx: dict[str, Any]) -> None:
     combined_system_prompt = ctx["combined_system_prompt"]
     llm_service = ctx["llm_service"]
 
+    t_start = time.time()
+
     # 1. Scrape Flagged
     print("\n" + "=" * 30 + "\n")
+    t_scrape = time.time()
     flagged_threads = run_scraper(mode="flagged")
+    print(f"[Timer] Scraping: {time.time() - t_scrape:.1f}s")
 
     if flagged_threads:
-        # 2. Process Active Flags
+        # 2. Filter
+        t_filter = time.time()
         print("\n--- Processing Active Flags ---")
-
         candidates = filter_threads_for_replies(flagged_threads, days_threshold)
+        print(f"[Timer] Filtering: {time.time() - t_filter:.1f}s")
+
+        # 3. Generate replies and create drafts
+        t_replies = time.time()
         process_replies(
             candidates,
             client,
@@ -448,20 +456,11 @@ def _do_follow_up(ctx: dict[str, Any]) -> None:
             preferred_model=preferred_model,
             salesforce_bcc=salesforce_bcc,
         )
-
-        # Generate summaries only for threads that need replies (deduplicated)
-        print("\n" + "=" * 30 + "\n")
-        threads_needing_replies = []
-        seen_ids = set()
-        for item in candidates:
-            thread = item["thread"]
-            thread_id = id(thread)
-            if thread_id not in seen_ids:
-                seen_ids.add(thread_id)
-                threads_needing_replies.append(thread)
-        generate_thread_summaries(threads_needing_replies, llm_service, preferred_model)
+        print(f"[Timer] Replies + drafts: {time.time() - t_replies:.1f}s")
     else:
         print("No flagged threads found.")
+
+    print(f"\n[Timer] Follow-up total: {time.time() - t_start:.1f}s")
 
 
 def _do_cold_outreach(ctx: dict[str, Any]) -> None:
