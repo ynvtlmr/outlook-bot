@@ -541,4 +541,18 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--follow-up", action="store_true")
+    group.add_argument("--cold-outreach", action="store_true")
+    group.add_argument("--run-all", action="store_true")
+    args = parser.parse_args()
+
+    if args.follow_up:
+        run_follow_up()
+    elif args.cold_outreach:
+        run_cold_outreach()
+    else:
+        main()

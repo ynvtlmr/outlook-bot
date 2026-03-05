@@ -155,7 +155,10 @@ def process_cold_outreach(
             continue
 
         # 4. Generate outreach email via LLM
-        products_str = ", ".join(lead["products"]) if lead["products"] else "Gen II Solutions"
+        # Priority: Portal and Analytics first, then the rest
+        PRODUCT_PRIORITY = {"Sensr Portal": 0, "Sensr Analytics": 1}
+        sorted_products = sorted(lead["products"], key=lambda p: PRODUCT_PRIORITY.get(p, 99))
+        products_str = ", ".join(sorted_products) if sorted_products else "Gen II Solutions"
         lead_context = (
             f"Account: {lead['account_name']}\n"
             f"Contact: {lead['contact_name']}\n"

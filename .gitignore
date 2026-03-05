@@ -11,3 +11,6 @@ build/
 zscaler_cert_bundle.pem
 .coverage
 system_prompt.txt
+Products Info/
+*.csv
+config.yaml

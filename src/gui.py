@@ -1,4 +1,6 @@
 import os
+import signal
+import subprocess
 import sys
 import threading
 from typing import Callable
@@ -71,6 +73,7 @@ class OutlookBotGUI(ctk.CTk):
         self.grid_rowconfigure(3, weight=1)
 
         self.is_running = False
+        self.bot_process: subprocess.Popen | None = None
 
         # --- Top Control Panel ---
         self.control_frame = ctk.CTkFrame(self)
@@ -514,10 +517,16 @@ class OutlookBotGUI(ctk.CTk):
             target_fn = main.main
 
         # Save before run
-        # Wait, if we save, we might need to ensure the files exist for main.py to read?
-        # main.py reads from config.py paths, which we also write to here.
         if not self.save_config():
             return
+
+        # Map function to CLI entry point
+        fn_to_cmd = {
+            main.run_follow_up: "follow_up",
+            main.run_cold_outreach: "cold_outreach",
+            main.main: "run_all",
+        }
+        cmd_arg = fn_to_cmd.get(target_fn, "run_all")
 
         self.is_running = True
         self.btn_follow_up.configure(state="disabled")
@@ -526,33 +535,42 @@ class OutlookBotGUI(ctk.CTk):
         self.btn_stop.configure(state="normal")
         self.log("\n" + "=" * 30 + "\nStarting Outlook Bot...\n" + "=" * 30 + "\n")
 
-        # Run in a separate thread to keep GUI responsive
-        threading.Thread(target=self.run_process, args=(target_fn,), daemon=True).start()
+        # Run as a subprocess so STOP can kill entire process tree
+        threading.Thread(target=self.run_process, args=(cmd_arg,), daemon=True).start()
 
-    def run_process(self, target_fn: Callable):
-        # Redirect stdout/stderr
-        original_stdout = sys.stdout
-        original_stderr = sys.stderr
-
-        sys.stdout = StdoutRedirector(self.log_box)
-        sys.stderr = StdoutRedirector(self.log_box)
+    def run_process(self, cmd_arg: str):
+        python = sys.executable
+        script = os.path.join(os.path.dirname(__file__), "main.py")
 
         try:
-            # Execute the target function
-            target_fn()
+            self.bot_process = subprocess.Popen(
+                [python, "-u", script, f"--{cmd_arg.replace('_', '-')}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+
+            # Stream output line by line to the GUI
+            for line in self.bot_process.stdout:
+                text = line.decode("utf-8", errors="replace")
+                self.log_box.after(0, self._append_log, text)
+
+            self.bot_process.wait()
 
         except Exception as e:
-            print(f"\n[Error during execution: {e}]")
-            import traceback
-
-            traceback.print_exc()
+            self.log_box.after(0, self._append_log, f"\n[Error: {e}]\n")
         finally:
-            # Restore stdout/stderr
-            sys.stdout = original_stdout
-            sys.stderr = original_stderr
-
-            # Notify GUI of completion
+            self.bot_process = None
             self.after(0, self.process_finished)
+
+    def _append_log(self, text: str):
+        try:
+            self.log_box.configure(state="normal")
+            self.log_box.insert("end", text)
+            self.log_box.see("end")
+            self.log_box.configure(state="disabled")
+        except Exception:
+            pass
 
     def process_finished(self):
         self.is_running = False
@@ -562,15 +580,24 @@ class OutlookBotGUI(ctk.CTk):
         self.btn_stop.configure(state="disabled")
         self.log("\n[Process finished]\n")
 
+    def _kill_bot_process(self):
+        """Kill the bot subprocess and all its children (AppleScripts)."""
+        proc = self.bot_process
+        if proc and proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                try:
+                    proc.kill()
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
+        self.bot_process = None
+
     def stop_bot(self):
-        # Since we are running in a thread, we can't easily "kill" it unless main.py checks a flag.
-        # For now, we'll just log that we can't force stop safely without refactoring main.py logic to be interruptible.
-        # But for packaging purposes, we can at least update the UI.
+        self._kill_bot_process()
         if self.is_running:
-            self.log("\n[Stop requested... waiting for current task to finish]\n")
-            # In a real app we'd set a flag that main.py checks.
-            # config.should_stop = True (if we implemented that)
-            pass
+            self.log("\n[Stopped]\n")
+            self.process_finished()
 
     def refresh_models_list(self, use_initial_pref=False):
         self.log("[Info] Detecting available models...\n")
@@ -685,8 +712,7 @@ class OutlookBotGUI(ctk.CTk):
         self.log(f"[Info] Model selection changed to: {choice}\n")
 
     def on_close(self):
-        if self.is_running:
-            self.stop_bot()
+        self._kill_bot_process()
         self.destroy()
 
     def _test_connection(self, provider: str, key: str, button: ctk.CTkButton, test_fn: Callable) -> None:
