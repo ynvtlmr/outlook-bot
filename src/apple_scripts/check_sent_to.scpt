@@ -16,16 +16,8 @@ on run argv
 			repeat with i from 1 to msgCount
 				try
 					set msg to item i of allMessages
-					set toRecips to to recipients of msg
-					repeat with r in toRecips
-						try
-							set recipAddr to address of (get email address of r)
-							set addressList to addressList & recipAddr & linefeed
-						end try
-					end repeat
-
-					set ccRecips to cc recipients of msg
-					repeat with r in ccRecips
+					set allRecips to (to recipients of msg) & (cc recipients of msg)
+					repeat with r in allRecips
 						try
 							set recipAddr to address of (get email address of r)
 							set addressList to addressList & recipAddr & linefeed

@@ -31,23 +31,19 @@ COLD_OUTREACH_PROMPT_PATH = os.path.join(USER_DATA_DIR, "cold_outreach_prompt.tx
 COLD_OUTREACH_PROMPT_EXAMPLE_PATH = os.path.join(RESOURCE_DIR, "cold_outreach_prompt.example.txt")
 OUTPUT_DIR = os.path.join(USER_DATA_DIR, "output")
 
-# Ensure System Prompt exists from example if missing
-if not os.path.exists(SYSTEM_PROMPT_PATH) and os.path.exists(SYSTEM_PROMPT_EXAMPLE_PATH):
-    import shutil
+def _ensure_config_file_exists(source_path: str, dest_path: str) -> None:
+    """Copies a source file to a destination if the destination does not exist."""
+    if not os.path.exists(dest_path) and os.path.exists(source_path):
+        import shutil
 
-    try:
-        shutil.copy2(SYSTEM_PROMPT_EXAMPLE_PATH, SYSTEM_PROMPT_PATH)
-    except Exception as e:
-        print(f"Warning: Could not create default system_prompt.txt: {e}")
+        try:
+            shutil.copy2(source_path, dest_path)
+        except Exception as e:
+            print(f"Warning: Could not create default {os.path.basename(dest_path)}: {e}")
 
-# Ensure Cold Outreach Prompt exists from example if missing
-if not os.path.exists(COLD_OUTREACH_PROMPT_PATH) and os.path.exists(COLD_OUTREACH_PROMPT_EXAMPLE_PATH):
-    import shutil
 
-    try:
-        shutil.copy2(COLD_OUTREACH_PROMPT_EXAMPLE_PATH, COLD_OUTREACH_PROMPT_PATH)
-    except Exception as e:
-        print(f"Warning: Could not create default cold_outreach_prompt.txt: {e}")
+_ensure_config_file_exists(SYSTEM_PROMPT_EXAMPLE_PATH, SYSTEM_PROMPT_PATH)
+_ensure_config_file_exists(COLD_OUTREACH_PROMPT_EXAMPLE_PATH, COLD_OUTREACH_PROMPT_PATH)
 
 # Resources (Bundled or Source)
 APPLESCRIPTS_DIR = os.path.join(RESOURCE_DIR, "src", "apple_scripts")

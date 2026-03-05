@@ -3,6 +3,7 @@ import signal
 import subprocess
 import sys
 import threading
+from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
@@ -296,8 +297,6 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_cold_prompt.grid(row=4, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
 
     def browse_csv(self):
-        from tkinter import filedialog
-
         path = filedialog.askopenfilename(
             title="Select Salesforce CSV Export",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
@@ -432,7 +431,13 @@ class OutlookBotGUI(ctk.CTk):
                 except Exception:
                     pass  # If read fails, start fresh
 
-            days = int(self.entry_days.get())
+            try:
+                days = int(self.entry_days.get().strip())
+            except ValueError:
+                self.log("[Error] Invalid Days Threshold. Must be an integer.\n")
+                success = False
+                return success
+
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
             salesforce_bcc = self.entry_bcc.get().strip()
             preferred_model = self.combo_model.get()
@@ -457,13 +462,9 @@ class OutlookBotGUI(ctk.CTk):
                     "cold_outreach_daily_limit": cold_outreach_daily_limit,
                 }
             )
-            # Note: disable_ssl_verify is now hardcoded in llm.py and not stored in config.yaml
 
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(data, f)
-        except ValueError:
-            self.log("[Error] Invalid Days Threshold. Must be an integer.\n")
-            success = False
         except (yaml.YAMLError, OSError) as e:
             self.log(f"[Error] Failed to save config.yaml: {e}\n")
             success = False
