@@ -1,6 +1,9 @@
 import os
+import signal
+import subprocess
 import sys
 import threading
+from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
@@ -12,6 +15,9 @@ import llm
 # Import main script logic
 import main
 from config import (
+    COLD_OUTREACH_DAILY_LIMIT,
+    COLD_OUTREACH_ENABLED,
+    COLD_OUTREACH_PROMPT_PATH,
     CONFIG_PATH,
     DAYS_THRESHOLD,
     DEFAULT_REPLY,
@@ -68,15 +74,38 @@ class OutlookBotGUI(ctk.CTk):
         self.grid_rowconfigure(3, weight=1)
 
         self.is_running = False
+        self.bot_process: subprocess.Popen | None = None
 
         # --- Top Control Panel ---
         self.control_frame = ctk.CTkFrame(self)
         self.control_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
 
-        self.btn_start = ctk.CTkButton(
-            self.control_frame, text="START BOT", command=self.start_bot, fg_color="green", hover_color="darkgreen"
+        self.btn_follow_up = ctk.CTkButton(
+            self.control_frame,
+            text="Follow Up",
+            command=lambda: self.start_bot(main.run_follow_up),
+            fg_color="green",
+            hover_color="darkgreen",
         )
-        self.btn_start.pack(side="left", padx=10, pady=10)
+        self.btn_follow_up.pack(side="left", padx=10, pady=10)
+
+        self.btn_cold_outreach = ctk.CTkButton(
+            self.control_frame,
+            text="Cold Outreach",
+            command=lambda: self.start_bot(main.run_cold_outreach),
+            fg_color="#1f538d",
+            hover_color="#163d6a",
+        )
+        self.btn_cold_outreach.pack(side="left", padx=10, pady=10)
+
+        self.btn_run_all = ctk.CTkButton(
+            self.control_frame,
+            text="Run All",
+            command=lambda: self.start_bot(main.main),
+            fg_color="green",
+            hover_color="darkgreen",
+        )
+        self.btn_run_all.pack(side="left", padx=10, pady=10)
 
         self.btn_stop = ctk.CTkButton(
             self.control_frame,
@@ -98,12 +127,16 @@ class OutlookBotGUI(ctk.CTk):
         self.tab_view.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
         self.tab_view.add("Configuration")
         self.tab_view.add("System Prompt")
+        self.tab_view.add("Cold Outreach")
 
         # -- Tab: Configuration --
         self.setup_config_tab()
 
         # -- Tab: System Prompt --
         self.setup_prompt_tab()
+
+        # -- Tab: Cold Outreach --
+        self.setup_cold_outreach_tab()
 
         # --- Log Output ---
         self.log_lbl = ctk.CTkLabel(self, text="Console Output:", font=("Arial", 12, "bold"))
@@ -224,6 +257,54 @@ class OutlookBotGUI(ctk.CTk):
         self.txt_prompt = ctk.CTkTextbox(tab, wrap="word")
         self.txt_prompt.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
+    def setup_cold_outreach_tab(self):
+        tab = self.tab_view.tab("Cold Outreach")
+        tab.grid_columnconfigure(1, weight=1)
+        tab.grid_rowconfigure(4, weight=1)
+
+        # Enable/Disable Toggle
+        lbl_enable = ctk.CTkLabel(tab, text="Enable:")
+        lbl_enable.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self.switch_cold_outreach = ctk.CTkSwitch(tab, text="Cold Outreach Enabled")
+        self.switch_cold_outreach.grid(row=0, column=1, padx=10, pady=10, sticky="w")
+
+        # CSV File Path
+        lbl_csv = ctk.CTkLabel(tab, text="CSV File:")
+        lbl_csv.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+        csv_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        csv_frame.grid(row=1, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        csv_frame.grid_columnconfigure(0, weight=1)
+
+        self.entry_csv_path = ctk.CTkEntry(csv_frame, width=400)
+        self.entry_csv_path.grid(row=0, column=0, sticky="ew")
+
+        self.btn_browse_csv = ctk.CTkButton(
+            csv_frame, text="Browse", command=self.browse_csv, width=80, fg_color="#333333"
+        )
+        self.btn_browse_csv.grid(row=0, column=1, padx=(10, 0))
+
+        # Daily Limit
+        lbl_limit = ctk.CTkLabel(tab, text="Daily Limit:")
+        lbl_limit.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        self.entry_daily_limit = ctk.CTkEntry(tab, width=100)
+        self.entry_daily_limit.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+
+        # Cold Outreach Prompt
+        lbl_prompt = ctk.CTkLabel(tab, text="Outreach Prompt:")
+        lbl_prompt.grid(row=3, column=0, padx=10, pady=(10, 0), sticky="nw")
+        self.txt_cold_prompt = ctk.CTkTextbox(tab, wrap="word")
+        self.txt_cold_prompt.grid(row=4, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+
+    def browse_csv(self):
+        path = filedialog.askopenfilename(
+            title="Select Salesforce CSV Export",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+        )
+        if path:
+            self.entry_csv_path.delete(0, "end")
+            self.entry_csv_path.insert(0, path)
+
     def _toggle_visibility(self, checkbox: ctk.CTkCheckBox, entry: ctk.CTkEntry) -> None:
         """Toggle password visibility for an entry field based on checkbox state."""
         entry.configure(show="" if checkbox.get() else "*")
@@ -306,6 +387,28 @@ class OutlookBotGUI(ctk.CTk):
         except OSError as e:
             self.log(f"[Error] Failed to load system_prompt.txt: {e}\n")
 
+        # 5b. Load Cold Outreach settings
+        if data.get("cold_outreach_enabled", COLD_OUTREACH_ENABLED):
+            self.switch_cold_outreach.select()
+        else:
+            self.switch_cold_outreach.deselect()
+
+        self.entry_csv_path.delete(0, "end")
+        self.entry_csv_path.insert(0, str(data.get("cold_outreach_csv_path", "")))
+
+        self.entry_daily_limit.delete(0, "end")
+        self.entry_daily_limit.insert(0, str(data.get("cold_outreach_daily_limit", COLD_OUTREACH_DAILY_LIMIT)))
+
+        # Load Cold Outreach Prompt
+        try:
+            if os.path.exists(COLD_OUTREACH_PROMPT_PATH):
+                with open(COLD_OUTREACH_PROMPT_PATH, "r") as f:
+                    cold_content = f.read()
+                self.txt_cold_prompt.delete("0.0", "end")
+                self.txt_cold_prompt.insert("0.0", cold_content)
+        except OSError as e:
+            self.log(f"[Error] Failed to load cold_outreach_prompt.txt: {e}\n")
+
         # 6. Auto-Test Connections if keys exist
         if self.entry_api_key.get().strip():
             self.test_gemini()
@@ -328,10 +431,23 @@ class OutlookBotGUI(ctk.CTk):
                 except Exception:
                     pass  # If read fails, start fresh
 
-            days = int(self.entry_days.get())
+            try:
+                days = int(self.entry_days.get().strip())
+            except ValueError:
+                self.log("[Error] Invalid Days Threshold. Must be an integer.\n")
+                success = False
+                return success
+
             default_reply = self.txt_default_reply.get("0.0", "end").strip()
             salesforce_bcc = self.entry_bcc.get().strip()
             preferred_model = self.combo_model.get()
+            cold_outreach_enabled = bool(self.switch_cold_outreach.get())
+            cold_outreach_csv_path = self.entry_csv_path.get().strip()
+            try:
+                cold_outreach_daily_limit = int(self.entry_daily_limit.get().strip())
+            except ValueError:
+                self.log("[Warning] Invalid daily limit. Using default.\n")
+                cold_outreach_daily_limit = COLD_OUTREACH_DAILY_LIMIT
 
             # Update only the fields we manage, preserve others
             data = existing_data.copy()
@@ -341,15 +457,14 @@ class OutlookBotGUI(ctk.CTk):
                     "default_reply": default_reply,
                     "salesforce_bcc": salesforce_bcc,
                     "preferred_model": preferred_model,
+                    "cold_outreach_enabled": cold_outreach_enabled,
+                    "cold_outreach_csv_path": cold_outreach_csv_path,
+                    "cold_outreach_daily_limit": cold_outreach_daily_limit,
                 }
             )
-            # Note: disable_ssl_verify is now hardcoded in llm.py and not stored in config.yaml
 
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(data, f)
-        except ValueError:
-            self.log("[Error] Invalid Days Threshold. Must be an integer.\n")
-            success = False
         except (yaml.YAMLError, OSError) as e:
             self.log(f"[Error] Failed to save config.yaml: {e}\n")
             success = False
@@ -382,69 +497,108 @@ class OutlookBotGUI(ctk.CTk):
             self.log(f"[Error] Failed to save system_prompt.txt: {e}\n")
             success = False
 
+        # 4. Save Cold Outreach Prompt
+        try:
+            cold_prompt_content = self.txt_cold_prompt.get("0.0", "end").strip()
+            with open(COLD_OUTREACH_PROMPT_PATH, "w") as f:
+                f.write(cold_prompt_content)
+        except OSError as e:
+            self.log(f"[Error] Failed to save cold_outreach_prompt.txt: {e}\n")
+            success = False
+
         if success:
             self.log("[Info] All settings saved successfully.\n")
         return success
 
-    def start_bot(self):
+    def start_bot(self, target_fn: Callable = None):
         if self.is_running:
             return
 
+        if target_fn is None:
+            target_fn = main.main
+
         # Save before run
-        # Wait, if we save, we might need to ensure the files exist for main.py to read?
-        # main.py reads from config.py paths, which we also write to here.
         if not self.save_config():
             return
 
+        # Map function to CLI entry point
+        fn_to_cmd = {
+            main.run_follow_up: "follow_up",
+            main.run_cold_outreach: "cold_outreach",
+            main.main: "run_all",
+        }
+        cmd_arg = fn_to_cmd.get(target_fn, "run_all")
+
         self.is_running = True
-        self.btn_start.configure(state="disabled")
+        self.btn_follow_up.configure(state="disabled")
+        self.btn_cold_outreach.configure(state="disabled")
+        self.btn_run_all.configure(state="disabled")
         self.btn_stop.configure(state="normal")
         self.log("\n" + "=" * 30 + "\nStarting Outlook Bot...\n" + "=" * 30 + "\n")
 
-        # Run in a separate thread to keep GUI responsive
-        threading.Thread(target=self.run_process, daemon=True).start()
+        # Run as a subprocess so STOP can kill entire process tree
+        threading.Thread(target=self.run_process, args=(cmd_arg,), daemon=True).start()
 
-    def run_process(self):
-        # Redirect stdout/stderr
-        original_stdout = sys.stdout
-        original_stderr = sys.stderr
-
-        sys.stdout = StdoutRedirector(self.log_box)
-        sys.stderr = StdoutRedirector(self.log_box)
+    def run_process(self, cmd_arg: str):
+        python = sys.executable
+        script = os.path.join(os.path.dirname(__file__), "main.py")
 
         try:
-            # Execute the main script logic
-            # main.main() does its work and returns.
-            main.main()
+            self.bot_process = subprocess.Popen(
+                [python, "-u", script, f"--{cmd_arg.replace('_', '-')}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+
+            # Stream output line by line to the GUI
+            for line in self.bot_process.stdout:
+                text = line.decode("utf-8", errors="replace")
+                self.log_box.after(0, self._append_log, text)
+
+            self.bot_process.wait()
 
         except Exception as e:
-            print(f"\n[Error during execution: {e}]")
-            import traceback
-
-            traceback.print_exc()
+            self.log_box.after(0, self._append_log, f"\n[Error: {e}]\n")
         finally:
-            # Restore stdout/stderr
-            sys.stdout = original_stdout
-            sys.stderr = original_stderr
-
-            # Notify GUI of completion
+            self.bot_process = None
             self.after(0, self.process_finished)
+
+    def _append_log(self, text: str):
+        try:
+            self.log_box.configure(state="normal")
+            self.log_box.insert("end", text)
+            self.log_box.see("end")
+            self.log_box.configure(state="disabled")
+        except Exception:
+            pass
 
     def process_finished(self):
         self.is_running = False
-        self.btn_start.configure(state="normal")
+        self.btn_follow_up.configure(state="normal")
+        self.btn_cold_outreach.configure(state="normal")
+        self.btn_run_all.configure(state="normal")
         self.btn_stop.configure(state="disabled")
         self.log("\n[Process finished]\n")
 
+    def _kill_bot_process(self):
+        """Kill the bot subprocess and all its children (AppleScripts)."""
+        proc = self.bot_process
+        if proc and proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                try:
+                    proc.kill()
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
+        self.bot_process = None
+
     def stop_bot(self):
-        # Since we are running in a thread, we can't easily "kill" it unless main.py checks a flag.
-        # For now, we'll just log that we can't force stop safely without refactoring main.py logic to be interruptible.
-        # But for packaging purposes, we can at least update the UI.
+        self._kill_bot_process()
         if self.is_running:
-            self.log("\n[Stop requested... waiting for current task to finish]\n")
-            # In a real app we'd set a flag that main.py checks.
-            # config.should_stop = True (if we implemented that)
-            pass
+            self.log("\n[Stopped]\n")
+            self.process_finished()
 
     def refresh_models_list(self, use_initial_pref=False):
         self.log("[Info] Detecting available models...\n")
@@ -559,8 +713,7 @@ class OutlookBotGUI(ctk.CTk):
         self.log(f"[Info] Model selection changed to: {choice}\n")
 
     def on_close(self):
-        if self.is_running:
-            self.stop_bot()
+        self._kill_bot_process()
         self.destroy()
 
     def _test_connection(self, provider: str, key: str, button: ctk.CTkButton, test_fn: Callable) -> None:

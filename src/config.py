@@ -27,16 +27,23 @@ CONFIG_PATH = os.path.join(USER_DATA_DIR, "config.yaml")
 ENV_PATH = os.path.join(USER_DATA_DIR, ".env")
 SYSTEM_PROMPT_PATH = os.path.join(USER_DATA_DIR, "system_prompt.txt")
 SYSTEM_PROMPT_EXAMPLE_PATH = os.path.join(RESOURCE_DIR, "system_prompt.example.txt")
+COLD_OUTREACH_PROMPT_PATH = os.path.join(USER_DATA_DIR, "cold_outreach_prompt.txt")
+COLD_OUTREACH_PROMPT_EXAMPLE_PATH = os.path.join(RESOURCE_DIR, "cold_outreach_prompt.example.txt")
 OUTPUT_DIR = os.path.join(USER_DATA_DIR, "output")
 
-# Ensure System Prompt exists from example if missing
-if not os.path.exists(SYSTEM_PROMPT_PATH) and os.path.exists(SYSTEM_PROMPT_EXAMPLE_PATH):
-    import shutil
+def _ensure_config_file_exists(source_path: str, dest_path: str) -> None:
+    """Copies a source file to a destination if the destination does not exist."""
+    if not os.path.exists(dest_path) and os.path.exists(source_path):
+        import shutil
 
-    try:
-        shutil.copy2(SYSTEM_PROMPT_EXAMPLE_PATH, SYSTEM_PROMPT_PATH)
-    except Exception as e:
-        print(f"Warning: Could not create default system_prompt.txt: {e}")
+        try:
+            shutil.copy2(source_path, dest_path)
+        except Exception as e:
+            print(f"Warning: Could not create default {os.path.basename(dest_path)}: {e}")
+
+
+_ensure_config_file_exists(SYSTEM_PROMPT_EXAMPLE_PATH, SYSTEM_PROMPT_PATH)
+_ensure_config_file_exists(COLD_OUTREACH_PROMPT_EXAMPLE_PATH, COLD_OUTREACH_PROMPT_PATH)
 
 # Resources (Bundled or Source)
 APPLESCRIPTS_DIR = os.path.join(RESOURCE_DIR, "src", "apple_scripts")
@@ -90,6 +97,11 @@ SALESFORCE_BCC: str = _config_data.get("salesforce_bcc", "")
 
 # Preferred model for LLM generation (None means use first available)
 PREFERRED_MODEL: Optional[str] = _config_data.get("preferred_model", None)
+
+# Cold Outreach
+COLD_OUTREACH_ENABLED: bool = _config_data.get("cold_outreach_enabled", False)
+COLD_OUTREACH_DAILY_LIMIT: int = _config_data.get("cold_outreach_daily_limit", 10)
+COLD_OUTREACH_CSV_PATH: str = _config_data.get("cold_outreach_csv_path", "")
 
 # Parsing Delimiters
 MSG_DELIMITER: str = "\n///END_OF_MESSAGE///\n"

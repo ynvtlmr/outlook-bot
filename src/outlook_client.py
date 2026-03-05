@@ -36,11 +36,26 @@ class OutlookClient:
         # Note: The AppleScript needs to be robust enough to handle the arguments
         return self._run_script("get_emails.scpt", [email_address])
 
-    def create_draft(self, to_address: str, subject: str, content: str) -> Optional[str]:
+    def create_draft(
+        self, to_address: str, subject: str, content: str, bcc_address: str = ""
+    ) -> Optional[str]:
         """
-        Creates a draft email.
+        Creates a draft email with optional BCC.
         """
-        return self._run_script("create_draft.scpt", [to_address, subject, content])
+        args = [to_address, subject, content]
+        if bcc_address:
+            args.append(bcc_address)
+        return self._run_script("create_draft.scpt", args)
+
+    def get_sent_recipients(self) -> set[str]:
+        """
+        Fetches all recipient email addresses from Outlook Sent Items (last 1000 messages).
+        Returns a set of lowercase email addresses for fast lookup.
+        """
+        result = self._run_script("check_sent_to.scpt")
+        if not result:
+            return set()
+        return {addr.strip().lower() for addr in result.splitlines() if addr.strip()}
 
     def reply_to_message(
         self, message_id: str, content: Optional[str] = None, bcc_address: Optional[str] = None

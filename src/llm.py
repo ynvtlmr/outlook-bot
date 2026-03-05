@@ -561,21 +561,11 @@ class LLMService:
         date_str = f"{today.month}/{today.day}/{str(today.year)[-2:]}"
 
         sf_note_prompt = (
-            "You are creating an SF Note (Salesforce note) for an email thread. "
-            "An SF Note is a one-paragraph note meant to be added to Salesforce "
-            "as an internal record of next steps.\n\n"
-            "REQUIREMENTS:\n"
-            "- Always start with today's date in MM/DD/YY format without leading zeros "
-            '(e.g., "1/10/25" for January 10th, 2025)\n'
-            "- Be focused on action items and next steps rather than product features\n"
-            '- Be written from Gen II\'s perspective (using "we" when referring to Gen II tasks)\n'
-            "- Be kept to a single paragraph as an internal reference\n"
-            "- Be concise and business-focused\n"
-            "- Summarize this status update into a Short & Punchy 'TL;DR' style update. "
-            "Use high-energy, conversational language and get straight to the point. "
-            "Strip out any fluff, use short sentences, and make it easy to digest in under 10 seconds.\n\n"
             f"Email Thread:\n{thread_content}\n\n"
-            f"SF Note (start with {date_str} and write one paragraph):"
+            f"Write a one-sentence Salesforce note starting with {date_str}. "
+            f"TL;DR style, punchy, straight to the point. "
+            f"Drop the subject pronoun — say 'reached out' not 'we reached out', 'pushing' not 'we're pushing'. "
+            f"Just the note, nothing else."
         )
 
         # Reorder models to try preferred_model first if specified
