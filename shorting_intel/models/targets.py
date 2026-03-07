@@ -375,9 +375,10 @@ TARGET_COMPANIES: list[TargetCompany] = [
         threat_level=ThreatLevel.HIGH,
         exchange="NYSE",
         disruption_thesis=(
-            "IT services and software engineering outsourcing. AI coding agents (Claude Code, "
-            "GitHub Copilot, Cursor) dramatically increase developer productivity, reducing need "
-            "to hire offshore engineering teams. Anthropic's agent SDK threatens consulting models."
+            "IT services and software engineering outsourcing. Morningstar rated No Moat. "
+            "AI coding agents (Claude Code, GitHub Copilot, Cursor) dramatically increase "
+            "developer productivity, reducing need to hire offshore engineering teams. "
+            "Down 29% YTD 2026. Dropped 16% in single day on cautious guidance Feb 2026."
         ),
         threat_vectors=[
             AIThreatVector("code generation", "anthropic", "Claude Code writes production-quality code autonomously", 0.85),
@@ -523,6 +524,108 @@ TARGET_COMPANIES: list[TargetCompany] = [
         ],
         key_metrics_to_watch=["gsv_growth", "active_clients", "freelancer_earnings", "take_rate"],
         historical_decline_pct=-75.0,
+    ),
+
+    # ─── RPA / AUTOMATION (BRIDGE TECHNOLOGY) ─────────────────────────
+    TargetCompany(
+        ticker="PATH",
+        name="UiPath",
+        category=DisruptionCategory.SOFTWARE_SERVICES_CONSULTING,
+        threat_level=ThreatLevel.HIGH,
+        exchange="NYSE",
+        disruption_thesis=(
+            "RPA (robotic process automation) is a bridge technology. UiPath automates human "
+            "behavior by screen-scraping and clicking; agentic AI replaces this entirely by "
+            "understanding intent and executing directly via APIs. As AI agents become standard, "
+            "the RPA layer becomes unnecessary middleware."
+        ),
+        threat_vectors=[
+            AIThreatVector("agent workflows", "anthropic", "Claude agents replace screen-scraping bots with direct API calls", 0.85),
+            AIThreatVector("agent workflows", "openai", "GPT agents understand and execute business processes natively", 0.80),
+            AIThreatVector("process automation", "google", "Gemini agents automate enterprise workflows end-to-end", 0.75),
+        ],
+        counter_intel_signals=[
+            CounterIntelSignal.BUZZWORD_OVERLOAD,
+            CounterIntelSignal.DEFENSIVE_AI_PIVOT,
+            CounterIntelSignal.CEO_DEPARTURE,
+        ],
+        key_metrics_to_watch=["arr_growth", "net_retention_rate", "customer_count", "deal_size"],
+        notes="CEO Rob Enslin departed 2024. RPA automated human behavior; agentic AI replaces it entirely.",
+    ),
+
+    # ─── ADDITIONAL IT SERVICES (Morningstar moat downgrades) ─────────
+    TargetCompany(
+        ticker="INFY",
+        name="Infosys",
+        category=DisruptionCategory.SOFTWARE_SERVICES_CONSULTING,
+        threat_level=ThreatLevel.MODERATE,
+        exchange="NYSE",
+        disruption_thesis=(
+            "Indian IT services giant. Morningstar downgraded moat from Wide to Narrow. "
+            "AI coding agents perform work at marginal cost, threatening the low-wage offshore "
+            "model. Citrini Research warns of mounting contract cancellations as AI erodes "
+            "cost advantage. Down 21% YTD 2026. 5-10% impact on coding revenue estimated."
+        ),
+        threat_vectors=[
+            AIThreatVector("code generation", "anthropic", "Claude Code automates offshore dev tasks", 0.70),
+            AIThreatVector("code generation", "openai", "Codex handles routine development at marginal cost", 0.65),
+        ],
+        counter_intel_signals=[
+            CounterIntelSignal.BUZZWORD_OVERLOAD,
+            CounterIntelSignal.GUIDANCE_CUT,
+        ],
+        key_metrics_to_watch=["headcount", "deal_pipeline", "revenue_per_employee", "attrition_rate"],
+        historical_decline_pct=-21.0,
+        notes="Morningstar moat downgraded from Wide to Narrow. Nifty IT fell 9.4% in one week Feb 2026.",
+    ),
+
+    # ─── SAAS PLATFORMS — SaaSpocalypse VICTIMS ──────────────────────
+    TargetCompany(
+        ticker="HUBS",
+        name="HubSpot",
+        category=DisruptionCategory.SAAS_PLATFORM,
+        threat_level=ThreatLevel.HIGH,
+        exchange="NYSE",
+        disruption_thesis=(
+            "Marketing/sales/CRM platform. AI agents can handle lead nurturing, email "
+            "marketing, content creation, and CRM data entry — the core workflows HubSpot "
+            "monetizes. Per-seat pricing threatened by AI consumption models. "
+            "Down 39% YTD 2026 after -42% in 2025."
+        ),
+        threat_vectors=[
+            AIThreatVector("marketing automation", "openai", "GPT generates campaigns, emails, and content directly", 0.75),
+            AIThreatVector("CRM automation", "anthropic", "Claude agents handle lead scoring and outreach", 0.70),
+        ],
+        counter_intel_signals=[
+            CounterIntelSignal.DEFENSIVE_AI_PIVOT,
+            CounterIntelSignal.BUZZWORD_OVERLOAD,
+        ],
+        key_metrics_to_watch=["seat_count", "revenue_per_customer", "net_retention", "free_to_paid_conversion"],
+        historical_decline_pct=-39.0,
+        notes="SaaSpocalypse victim. Seat compression: AI reduces headcount which reduces per-seat SaaS licenses.",
+    ),
+    TargetCompany(
+        ticker="TEAM",
+        name="Atlassian",
+        category=DisruptionCategory.SAAS_PLATFORM,
+        threat_level=ThreatLevel.MODERATE,
+        exchange="NASDAQ",
+        disruption_thesis=(
+            "Developer tools (Jira, Confluence, Bitbucket). AI coding agents reduce the number "
+            "of developers needed, which directly reduces Jira seat count. AI can also "
+            "auto-generate documentation (threatening Confluence) and handle code review. "
+            "Down 35% YTD 2026."
+        ),
+        threat_vectors=[
+            AIThreatVector("project management", "anthropic", "AI agents self-coordinate, reducing Jira dependency", 0.60),
+            AIThreatVector("documentation", "openai", "GPT auto-generates docs, reducing Confluence value", 0.55),
+        ],
+        counter_intel_signals=[
+            CounterIntelSignal.DEFENSIVE_AI_PIVOT,
+        ],
+        key_metrics_to_watch=["seat_count", "cloud_revenue_growth", "net_retention_rate"],
+        historical_decline_pct=-35.0,
+        notes="Seat compression risk: fewer developers = fewer Jira/Confluence licenses.",
     ),
 
     # ─── LEGAL / DOCUMENT REVIEW ───────────────────────────────────────

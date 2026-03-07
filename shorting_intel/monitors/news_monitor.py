@@ -46,6 +46,10 @@ TICKER_TO_CIK: dict[str, str] = {
     "UPWK": "0001627475",
     "SCHW": "0000316709",
     "WIT": "0001357450",
+    "PATH": "0001734722",
+    "INFY": "0001067491",
+    "HUBS": "0001404655",
+    "TEAM": "0001650372",
 }
 
 # Earnings call keywords that signal AI disruption
