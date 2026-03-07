@@ -1,7 +1,9 @@
-import unittest
+"""Tests for the GUI module (import-only, since GUI requires display)."""
+
+import pytest
 
 
-class TestOutlookBotGUI(unittest.TestCase):
-    @unittest.skip("Skipping GUI tests due to headless environment and mocking complexity")
-    def test_gui_placeholder(self):
+@pytest.mark.skipif(True, reason="GUI tests require display environment")
+class TestOutlookBotGUI:
+    def test_placeholder(self):
         pass

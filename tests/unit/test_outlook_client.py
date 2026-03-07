@@ -1,55 +1,54 @@
-import subprocess
+"""Tests for the Outlook Mac client."""
 
-from outlook_client import OutlookClient, get_outlook_version
+from unittest.mock import MagicMock, patch
 
-
-def test_run_script_success(mocker):
-    mocker.patch("os.path.exists", return_value=True)
-    mocker.patch("subprocess.run", return_value=mocker.Mock(stdout="Output", returncode=0))
-
-    client = OutlookClient("/scripts")
-    res = client._run_script("test.scpt")
-    assert res == "Output"
+from outlook_bot.email.outlook_mac import OutlookMacClient
 
 
-def test_run_script_failure(mocker):
-    mocker.patch("os.path.exists", return_value=True)
-    mocker.patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd"))
+class TestOutlookMacClient:
+    def test_run_script_success(self):
+        client = OutlookMacClient("/fake/scripts")
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="result\n", returncode=0)
+            result = client._run_script("test.scpt")
+            assert result == "result"
 
-    client = OutlookClient("/scripts")
-    # Exception is caught and logged, returning None
-    res = client._run_script("test.scpt")
-    assert res is None
+    def test_run_script_failure(self):
+        client = OutlookMacClient("/fake/scripts")
+        from subprocess import CalledProcessError
 
+        with patch("subprocess.run", side_effect=CalledProcessError(1, "cmd", stderr="error")):
+            result = client._run_script("test.scpt")
+            assert result is None
 
-def test_get_outlook_version(mocker):
-    # Mock osascript output
-    mocker.patch("subprocess.run", return_value=mocker.Mock(stdout="16.0", returncode=0))
-    ver = get_outlook_version()
-    assert ver == "16.0"
+    def test_activate(self):
+        client = OutlookMacClient("/fake/scripts")
+        with patch.object(client, "_run_script") as mock:
+            client.activate()
+            mock.assert_called_once_with("activate_outlook.scpt")
 
+    def test_get_version(self):
+        client = OutlookMacClient("/fake/scripts")
+        with patch.object(client, "_run_script", return_value="16.0") as mock:
+            result = client.get_version()
+            assert result == "16.0"
+            mock.assert_called_once_with("get_version.scpt")
 
-def test_reply_to_message(mocker):
-    mocker.patch("os.path.exists", return_value=True)
-    mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(stdout="Done", returncode=0))
+    def test_reply_to_message(self):
+        client = OutlookMacClient("/fake/scripts")
+        with patch.object(client, "_run_script", return_value="OK") as mock:
+            result = client.reply_to_message("msg123", "Reply text", "bcc@example.com")
+            assert result == "OK"
+            mock.assert_called_once_with("reply_to_message.scpt", ["msg123", "Reply text", "bcc@example.com"])
 
-    client = OutlookClient("/scripts")
-    client.reply_to_message("msg1", "Body")
+    def test_get_sent_recipients(self):
+        client = OutlookMacClient("/fake/scripts")
+        with patch.object(client, "_run_script", return_value="A@x.com\nB@y.com\n"):
+            result = client.get_sent_recipients()
+            assert result == {"a@x.com", "b@y.com"}
 
-    # Check arguments
-    args = mock_run.call_args[0][0]
-    assert "msg1" in args
-    assert "Body" in args
-
-
-def test_activate_outlook(mocker):
-    """Test calling activate_outlook script."""
-    mocker.patch("os.path.exists", return_value=True)
-    mock_run = mocker.patch("subprocess.run", return_value=mocker.Mock(stdout="", returncode=0))
-
-    client = OutlookClient("/scripts")
-    client.activate_outlook()
-
-    # Verify correct script name was used
-    args = mock_run.call_args[0][0]
-    assert "activate_outlook.scpt" in args[-1]
+    def test_get_sent_recipients_empty(self):
+        client = OutlookMacClient("/fake/scripts")
+        with patch.object(client, "_run_script", return_value=None):
+            result = client.get_sent_recipients()
+            assert result == set()

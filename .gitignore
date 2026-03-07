@@ -1,16 +1,41 @@
-output/
-__pycache__
-.DS_Store
-*/.DS_Store
-venv/
-.env
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
 dist/
 build/
+
+# Virtual environments
 .venv/
-.ruff_cache/
-zscaler_cert_bundle.pem
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+*/.DS_Store
+Thumbs.db
+
+# Environment & secrets
+.env
+*.env.local
+
+# Project-specific
+output/
 .coverage
+coverage.xml
+htmlcov/
+.ruff_cache/
+.ty_cache/
+zscaler_cert_bundle.pem
 system_prompt.txt
+cold_outreach_prompt.txt
 Products Info/
 *.csv
 config.yaml
