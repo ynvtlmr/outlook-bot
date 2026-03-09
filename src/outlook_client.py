@@ -1,5 +1,6 @@
 import os
 import subprocess
+from datetime import datetime
 from typing import Optional
 
 from config import APPLESCRIPTS_DIR
@@ -56,6 +57,57 @@ class OutlookClient:
         if not result:
             return set()
         return {addr.strip().lower() for addr in result.splitlines() if addr.strip()}
+
+    def get_sent_history(self) -> dict[str, list[datetime]]:
+        """
+        Fetches recipient email + sent date pairs from Outlook Sent Items (last 2000 messages).
+        Returns dict mapping lowercase email -> sorted list of sent datetimes.
+        Used for upsell stage detection (counting outreach attempts and timing).
+        """
+        result = self._run_script("get_sent_details.scpt")
+        if not result:
+            return {}
+        history: dict[str, list[datetime]] = {}
+        for line in result.splitlines():
+            line = line.strip()
+            if "|" not in line:
+                continue
+            email_part, date_part = line.split("|", 1)
+            email_lower = email_part.strip().lower()
+            try:
+                dt = datetime.strptime(date_part.strip(), "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                continue
+            history.setdefault(email_lower, []).append(dt)
+        # Sort each list chronologically
+        for dates in history.values():
+            dates.sort()
+        return history
+
+    def get_inbox_senders(self) -> dict[str, datetime]:
+        """
+        Fetches sender email + date pairs from Outlook Inbox (last 1000 messages).
+        Returns dict mapping lowercase sender email -> most recent message datetime.
+        Used for upsell stage detection (checking if a contact replied).
+        """
+        result = self._run_script("get_inbox_senders.scpt")
+        if not result:
+            return {}
+        senders: dict[str, datetime] = {}
+        for line in result.splitlines():
+            line = line.strip()
+            if "|" not in line:
+                continue
+            email_part, date_part = line.split("|", 1)
+            email_lower = email_part.strip().lower()
+            try:
+                dt = datetime.strptime(date_part.strip(), "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                continue
+            # Keep only the most recent date per sender
+            if email_lower not in senders or dt > senders[email_lower]:
+                senders[email_lower] = dt
+        return senders
 
     def reply_to_message(
         self, message_id: str, content: Optional[str] = None, bcc_address: Optional[str] = None
