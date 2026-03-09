@@ -9,11 +9,62 @@ from outlook_client import OutlookClient
 
 GENERIC_PREFIXES = {"info", "news", "contact", "support", "admin"}
 
+PRODUCT_WEIGHTS = {
+    "Sensr Portal": 3,
+    "Sensr Analytics": 2,
+    "Sensr DataBridge": 1,
+    "Funded": 1,
+}
+
+STRATEGIES = ["default", "round_robin", "product_fit"]
+
 
 def is_generic_email(email: str) -> bool:
     """Returns True for generic email prefixes like info@, news@, etc."""
     local_part = email.split("@")[0].lower()
     return local_part in GENERIC_PREFIXES
+
+
+def product_fit_score(lead: dict[str, Any]) -> int:
+    """Sum weighted scores for each product tagged on a lead."""
+    return sum(PRODUCT_WEIGHTS.get(p, 1) for p in lead["products"])
+
+
+def prioritize_leads(leads: list[dict[str, Any]], strategy: str) -> list[dict[str, Any]]:
+    """Sort leads according to the chosen strategy."""
+    if strategy == "product_fit":
+        # Highest product-fit score first, personal emails break ties
+        leads.sort(key=lambda l: (-product_fit_score(l), is_generic_email(l["email"])))
+    elif strategy == "round_robin":
+        # Pick the best contact per account, then interleave accounts
+        account_buckets: dict[str, list[dict[str, Any]]] = {}
+        for lead in leads:
+            acct = lead["account_name"] or "Unknown"
+            account_buckets.setdefault(acct, []).append(lead)
+        # Within each account, pick the best contact (personal > generic, most products)
+        for acct in account_buckets:
+            account_buckets[acct].sort(
+                key=lambda l: (is_generic_email(l["email"]), -len(l["products"]))
+            )
+        # Sort accounts by their best lead's product count (descending)
+        sorted_accounts = sorted(
+            account_buckets.values(),
+            key=lambda bucket: -len(bucket[0]["products"]),
+        )
+        # Round-robin: take one lead per account at a time
+        result: list[dict[str, Any]] = []
+        while sorted_accounts:
+            next_round = []
+            for bucket in sorted_accounts:
+                result.append(bucket.pop(0))
+                if bucket:
+                    next_round.append(bucket)
+            sorted_accounts = next_round
+        leads = result
+    else:
+        # Default: personal emails first, CSV order otherwise
+        leads.sort(key=lambda l: is_generic_email(l["email"]))
+    return leads
 
 
 def load_csv_leads(csv_path: str) -> list[dict[str, Any]]:
@@ -100,6 +151,7 @@ def process_cold_outreach(
     csv_path: str,
     daily_limit: int,
     salesforce_bcc: str,
+    strategy: str = "default",
 ) -> None:
     """
     Main cold outreach orchestration:
@@ -123,8 +175,16 @@ def process_cold_outreach(
     if not leads:
         return
 
-    # 2. Sort: personal emails first, generic last
-    leads.sort(key=lambda lead: is_generic_email(lead["email"]))
+    # 2. Prioritize leads based on chosen strategy
+    print(f"  -> Strategy: {strategy}")
+    leads = prioritize_leads(leads, strategy)
+
+    # Show top leads after prioritization
+    preview_count = min(5, len(leads))
+    print(f"  -> Top {preview_count} leads after prioritization:")
+    for i, lead in enumerate(leads[:preview_count], 1):
+        score = sum(PRODUCT_WEIGHTS.get(p, 1) for p in lead["products"])
+        print(f"     {i}. {lead['account_name']} ({lead['email']}) - {', '.join(lead['products']) or 'no products'} [score={score}]")
 
     # 3. Fetch all sent recipients in one batch call (much faster than per-lead)
     print("  -> Fetching sent recipients from Outlook...")
@@ -132,6 +192,11 @@ def process_cold_outreach(
     print(f"  -> Found {len(sent_recipients)} unique sent recipients.")
 
     # 4. Check against sent recipients and collect un-contacted leads
+    un_contacted = [l for l in leads if l["email"] not in sent_recipients]
+    print(f"  -> Un-contacted leads: {len(un_contacted)} of {len(leads)} (daily limit: {daily_limit})")
+    if len(un_contacted) <= daily_limit:
+        print(f"  -> Note: All un-contacted leads fit within daily limit, so strategy won't change which leads are drafted.")
+
     drafts_created = 0
     already_contacted = 0
 

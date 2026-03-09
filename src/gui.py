@@ -14,17 +14,20 @@ import llm
 
 # Import main script logic
 import main
+from cold_outreach import STRATEGIES
 from config import (
     COLD_OUTREACH_DAILY_LIMIT,
     COLD_OUTREACH_ENABLED,
     COLD_OUTREACH_PROMPT_PATH,
+    COLD_OUTREACH_STRATEGY,
     CONFIG_PATH,
     DAYS_THRESHOLD,
-    DEFAULT_REPLY,
+
     ENV_GEMINI_API_KEY,
     ENV_OPENAI_API_KEY,
     ENV_OPENROUTER_API_KEY,
     ENV_PATH,
+    FOLLOW_UP_DAILY_LIMIT,
     SALESFORCE_BCC,
     SYSTEM_PROMPT_PATH,
     CredentialManager,
@@ -65,7 +68,7 @@ class OutlookBotGUI(ctk.CTk):
 
         # Window Setup
         self.title("Outlook Bot Manager")
-        self.geometry("800x700")
+        self.geometry("950x700")
         self.grid_columnconfigure(0, weight=1)
         # Row 0: Control Panel
         # Row 1: Tab View
@@ -97,6 +100,15 @@ class OutlookBotGUI(ctk.CTk):
             hover_color="#163d6a",
         )
         self.btn_cold_outreach.pack(side="left", padx=10, pady=10)
+
+        self.btn_test_prompt = ctk.CTkButton(
+            self.control_frame,
+            text="Test Prompt",
+            command=self.start_test_prompt,
+            fg_color="#b8860b",
+            hover_color="#8b6508",
+        )
+        self.btn_test_prompt.pack(side="left", padx=10, pady=10)
 
         self.btn_run_all = ctk.CTkButton(
             self.control_frame,
@@ -204,11 +216,11 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days = ctk.CTkEntry(tab, width=100)
         self.entry_days.grid(row=3, column=1, padx=10, pady=10, sticky="w")
 
-        # Default Reply
-        lbl_reply = ctk.CTkLabel(tab, text="Default Reply:")
-        lbl_reply.grid(row=4, column=0, padx=10, pady=10, sticky="nw")
-        self.txt_default_reply = ctk.CTkTextbox(tab, height=60)
-        self.txt_default_reply.grid(row=4, column=1, padx=10, pady=10, sticky="ew", columnspan=2)
+        # Follow-Up Daily Limit
+        lbl_fu_limit = ctk.CTkLabel(tab, text="Follow-Up Daily Limit:")
+        lbl_fu_limit.grid(row=4, column=0, padx=10, pady=10, sticky="w")
+        self.entry_follow_up_limit = ctk.CTkEntry(tab, width=100)
+        self.entry_follow_up_limit.grid(row=4, column=1, padx=10, pady=10, sticky="w")
 
         # Salesforce BCC
         lbl_bcc = ctk.CTkLabel(tab, text="Salesforce BCC:")
@@ -260,7 +272,7 @@ class OutlookBotGUI(ctk.CTk):
     def setup_cold_outreach_tab(self):
         tab = self.tab_view.tab("Cold Outreach")
         tab.grid_columnconfigure(1, weight=1)
-        tab.grid_rowconfigure(4, weight=1)
+        tab.grid_rowconfigure(5, weight=1)
 
         # Enable/Disable Toggle
         lbl_enable = ctk.CTkLabel(tab, text="Enable:")
@@ -290,11 +302,26 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_daily_limit = ctk.CTkEntry(tab, width=100)
         self.entry_daily_limit.grid(row=2, column=1, padx=10, pady=10, sticky="w")
 
+        # Lead Strategy
+        strategy_labels = {"default": "Default (CSV Order)", "round_robin": "Round-Robin", "product_fit": "Product-Fit Scoring"}
+        self._strategy_label_to_key = {v: k for k, v in strategy_labels.items()}
+        self._strategy_key_to_label = strategy_labels
+
+        lbl_strategy = ctk.CTkLabel(tab, text="Lead Strategy:")
+        lbl_strategy.grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        self.combo_strategy = ctk.CTkComboBox(
+            tab,
+            state="readonly",
+            values=list(strategy_labels.values()),
+        )
+        self.combo_strategy.grid(row=3, column=1, padx=10, pady=10, sticky="w")
+        self.combo_strategy.set(strategy_labels["default"])
+
         # Cold Outreach Prompt
         lbl_prompt = ctk.CTkLabel(tab, text="Outreach Prompt:")
-        lbl_prompt.grid(row=3, column=0, padx=10, pady=(10, 0), sticky="nw")
+        lbl_prompt.grid(row=4, column=0, padx=10, pady=(10, 0), sticky="nw")
         self.txt_cold_prompt = ctk.CTkTextbox(tab, wrap="word")
-        self.txt_cold_prompt.grid(row=4, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+        self.txt_cold_prompt.grid(row=5, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
 
     def browse_csv(self):
         path = filedialog.askopenfilename(
@@ -340,9 +367,9 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_days.delete(0, "end")
         self.entry_days.insert(0, str(data.get("days_threshold", DAYS_THRESHOLD)))
 
-        # Default Reply
-        self.txt_default_reply.delete("0.0", "end")
-        self.txt_default_reply.insert("0.0", data.get("default_reply", DEFAULT_REPLY))
+        # Follow-Up Daily Limit
+        self.entry_follow_up_limit.delete(0, "end")
+        self.entry_follow_up_limit.insert(0, str(data.get("follow_up_daily_limit", FOLLOW_UP_DAILY_LIMIT)))
 
         # Salesforce BCC
         self.entry_bcc.delete(0, "end")
@@ -399,6 +426,11 @@ class OutlookBotGUI(ctk.CTk):
         self.entry_daily_limit.delete(0, "end")
         self.entry_daily_limit.insert(0, str(data.get("cold_outreach_daily_limit", COLD_OUTREACH_DAILY_LIMIT)))
 
+        # Lead Strategy
+        strategy_key = data.get("cold_outreach_strategy", COLD_OUTREACH_STRATEGY)
+        strategy_label = self._strategy_key_to_label.get(strategy_key, self._strategy_key_to_label["default"])
+        self.combo_strategy.set(strategy_label)
+
         # Load Cold Outreach Prompt
         try:
             if os.path.exists(COLD_OUTREACH_PROMPT_PATH):
@@ -438,11 +470,17 @@ class OutlookBotGUI(ctk.CTk):
                 success = False
                 return success
 
-            default_reply = self.txt_default_reply.get("0.0", "end").strip()
+            try:
+                follow_up_daily_limit = int(self.entry_follow_up_limit.get().strip())
+            except ValueError:
+                self.log("[Warning] Invalid follow-up daily limit. Using default.\n")
+                follow_up_daily_limit = FOLLOW_UP_DAILY_LIMIT
+
             salesforce_bcc = self.entry_bcc.get().strip()
             preferred_model = self.combo_model.get()
             cold_outreach_enabled = bool(self.switch_cold_outreach.get())
             cold_outreach_csv_path = self.entry_csv_path.get().strip()
+            cold_outreach_strategy = self._strategy_label_to_key.get(self.combo_strategy.get(), "default")
             try:
                 cold_outreach_daily_limit = int(self.entry_daily_limit.get().strip())
             except ValueError:
@@ -454,12 +492,13 @@ class OutlookBotGUI(ctk.CTk):
             data.update(
                 {
                     "days_threshold": days,
-                    "default_reply": default_reply,
+                    "follow_up_daily_limit": follow_up_daily_limit,
                     "salesforce_bcc": salesforce_bcc,
                     "preferred_model": preferred_model,
                     "cold_outreach_enabled": cold_outreach_enabled,
                     "cold_outreach_csv_path": cold_outreach_csv_path,
                     "cold_outreach_daily_limit": cold_outreach_daily_limit,
+                    "cold_outreach_strategy": cold_outreach_strategy,
                 }
             )
 
@@ -510,6 +549,32 @@ class OutlookBotGUI(ctk.CTk):
             self.log("[Info] All settings saved successfully.\n")
         return success
 
+    def start_test_prompt(self):
+        """Open a file picker for a .txt email, then run test prompt."""
+        if self.is_running:
+            return
+
+        email_file = filedialog.askopenfilename(
+            title="Select Email .txt File",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if not email_file:
+            return
+
+        # Save settings first
+        if not self.save_config():
+            return
+
+        self.is_running = True
+        self.btn_follow_up.configure(state="disabled")
+        self.btn_cold_outreach.configure(state="disabled")
+        self.btn_test_prompt.configure(state="disabled")
+        self.btn_run_all.configure(state="disabled")
+        self.btn_stop.configure(state="normal")
+        self.log("\n" + "=" * 30 + "\nStarting Test Prompt...\n" + "=" * 30 + "\n")
+
+        threading.Thread(target=self.run_process_raw, args=(["--test-prompt", email_file],), daemon=True).start()
+
     def start_bot(self, target_fn: Callable = None):
         if self.is_running:
             return
@@ -532,12 +597,38 @@ class OutlookBotGUI(ctk.CTk):
         self.is_running = True
         self.btn_follow_up.configure(state="disabled")
         self.btn_cold_outreach.configure(state="disabled")
+        self.btn_test_prompt.configure(state="disabled")
         self.btn_run_all.configure(state="disabled")
         self.btn_stop.configure(state="normal")
         self.log("\n" + "=" * 30 + "\nStarting Outlook Bot...\n" + "=" * 30 + "\n")
 
         # Run as a subprocess so STOP can kill entire process tree
         threading.Thread(target=self.run_process, args=(cmd_arg,), daemon=True).start()
+
+    def run_process_raw(self, extra_args: list[str]):
+        """Run main.py with arbitrary CLI args."""
+        python = sys.executable
+        script = os.path.join(os.path.dirname(__file__), "main.py")
+
+        try:
+            self.bot_process = subprocess.Popen(
+                [python, "-u", script] + extra_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+
+            for line in self.bot_process.stdout:
+                text = line.decode("utf-8", errors="replace")
+                self.log_box.after(0, self._append_log, text)
+
+            self.bot_process.wait()
+
+        except Exception as e:
+            self.log_box.after(0, self._append_log, f"\n[Error: {e}]\n")
+        finally:
+            self.bot_process = None
+            self.after(0, self.process_finished)
 
     def run_process(self, cmd_arg: str):
         python = sys.executable
@@ -577,6 +668,7 @@ class OutlookBotGUI(ctk.CTk):
         self.is_running = False
         self.btn_follow_up.configure(state="normal")
         self.btn_cold_outreach.configure(state="normal")
+        self.btn_test_prompt.configure(state="normal")
         self.btn_run_all.configure(state="normal")
         self.btn_stop.configure(state="disabled")
         self.log("\n[Process finished]\n")

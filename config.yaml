@@ -1,7 +1,14 @@
-cold_outreach_csv_path: report1769108279255.csv
-cold_outreach_daily_limit: 2
+cold_outreach_csv_path: /Users/idavid/Downloads/report1773071983187.csv
+cold_outreach_daily_limit: 3
 cold_outreach_enabled: true
-days_threshold: 7
+cold_outreach_strategy: default
+days_threshold: 5
 default_reply: Thank you for your email. I will review it and get back to you shortly.
+follow_up_daily_limit: 50
 preferred_model: gemini-3-flash-preview
 salesforce_bcc: emailtosalesforce@l-17uxnqnkdmr6wlis16e4xs1l0bqwoii4lnt38xy8g1ntga9i0m.g-gjjumai.na209.le.salesforce.com
+upsell_outreach_enabled: true
+upsell_outreach_daily_limit: 5
+upsell_principal_csv_path: "Active Clients - Principle.csv"
+upsell_exclude_principals:
+  - "Shai Haddad"

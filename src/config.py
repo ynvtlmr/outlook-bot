@@ -90,18 +90,26 @@ GEMINI_API_KEY: Optional[str] = CredentialManager.get_gemini_key()
 OPENAI_API_KEY: Optional[str] = CredentialManager.get_openai_key()
 OPENROUTER_API_KEY: Optional[str] = CredentialManager.get_openrouter_key()
 DAYS_THRESHOLD: int = _config_data.get("days_threshold", 5)
-DEFAULT_REPLY: str = _config_data.get(
-    "default_reply", "Thank you for your email. I will review it and get back to you shortly."
-)
 SALESFORCE_BCC: str = _config_data.get("salesforce_bcc", "")
 
 # Preferred model for LLM generation (None means use first available)
 PREFERRED_MODEL: Optional[str] = _config_data.get("preferred_model", None)
 
+# Follow-Up
+FOLLOW_UP_DAILY_LIMIT: int = _config_data.get("follow_up_daily_limit", 50)
+
 # Cold Outreach
 COLD_OUTREACH_ENABLED: bool = _config_data.get("cold_outreach_enabled", False)
 COLD_OUTREACH_DAILY_LIMIT: int = _config_data.get("cold_outreach_daily_limit", 10)
 COLD_OUTREACH_CSV_PATH: str = _config_data.get("cold_outreach_csv_path", "")
+COLD_OUTREACH_STRATEGY: str = _config_data.get("cold_outreach_strategy", "default")
+
+# Upsell Outreach
+UPSELL_OUTREACH_PROMPT_PATH = os.path.join(USER_DATA_DIR, "upsell_prompt.txt")
+UPSELL_OUTREACH_ENABLED: bool = _config_data.get("upsell_outreach_enabled", False)
+UPSELL_OUTREACH_DAILY_LIMIT: int = _config_data.get("upsell_outreach_daily_limit", 5)
+UPSELL_PRINCIPAL_CSV_PATH: str = _config_data.get("upsell_principal_csv_path", "")
+UPSELL_EXCLUDE_PRINCIPALS: list[str] = _config_data.get("upsell_exclude_principals", [])
 
 # Parsing Delimiters
 MSG_DELIMITER: str = "\n///END_OF_MESSAGE///\n"

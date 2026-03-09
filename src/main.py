@@ -10,7 +10,15 @@ import yaml
 
 import llm
 from cold_outreach import process_cold_outreach
-from config import APPLESCRIPTS_DIR, COLD_OUTREACH_PROMPT_PATH, CONFIG_PATH, OUTPUT_DIR, SYSTEM_PROMPT_PATH
+from config import (
+    APPLESCRIPTS_DIR,
+    COLD_OUTREACH_PROMPT_PATH,
+    CONFIG_PATH,
+    OUTPUT_DIR,
+    SYSTEM_PROMPT_PATH,
+    UPSELL_OUTREACH_PROMPT_PATH,
+)
+from upsell_outreach import process_upsell_outreach
 from date_utils import get_current_date_context, get_latest_date
 from outlook_client import OutlookClient, get_outlook_version
 from scraper import run_scraper
@@ -158,6 +166,14 @@ def process_replies(
 
         if reply_text:
             create_draft_reply(client, msg_id, subject, reply_text, salesforce_bcc)
+
+            # Generate and print SF Note
+            print("  -> Generating SF Note...")
+            sf_note = llm_service.generate_sf_note(job["content"], preferred_model=preferred_model)
+            if sf_note:
+                print(f"\n📋 SF Note for '{subject}':\n   {sf_note}\n")
+            else:
+                print(f"  -> Warning: Failed to generate SF Note for '{subject}'")
         else:
             print(f"  -> Warning: No reply generated for '{subject}' (ID: {msg_id})")
 
@@ -387,11 +403,18 @@ def _setup() -> dict[str, Any] | None:
     salesforce_bcc = config_data.get("salesforce_bcc", "")
     cold_outreach_enabled = config_data.get("cold_outreach_enabled", False)
     cold_outreach_csv_path = config_data.get("cold_outreach_csv_path", "")
+    follow_up_daily_limit = config_data.get("follow_up_daily_limit", 50)
     cold_outreach_daily_limit = config_data.get("cold_outreach_daily_limit", 10)
+    cold_outreach_strategy = config_data.get("cold_outreach_strategy", "default")
+    upsell_outreach_enabled = config_data.get("upsell_outreach_enabled", False)
+    upsell_outreach_daily_limit = config_data.get("upsell_outreach_daily_limit", 5)
+    upsell_principal_csv_path = config_data.get("upsell_principal_csv_path", "")
+    upsell_exclude_principals = config_data.get("upsell_exclude_principals", [])
     print(
         f"Configuration Loaded: Days Threshold={days_threshold}, "
         f"Preferred Model={preferred_model}, BCC={salesforce_bcc}, "
-        f"Cold Outreach={'ON' if cold_outreach_enabled else 'OFF'}"
+        f"Cold Outreach={'ON' if cold_outreach_enabled else 'OFF'}, "
+        f"Upsell Outreach={'ON' if upsell_outreach_enabled else 'OFF'}"
     )
 
     # Load System Prompt and Date Context
@@ -414,9 +437,15 @@ def _setup() -> dict[str, Any] | None:
         "days_threshold": days_threshold,
         "preferred_model": preferred_model,
         "salesforce_bcc": salesforce_bcc,
+        "follow_up_daily_limit": follow_up_daily_limit,
         "cold_outreach_enabled": cold_outreach_enabled,
         "cold_outreach_csv_path": cold_outreach_csv_path,
         "cold_outreach_daily_limit": cold_outreach_daily_limit,
+        "cold_outreach_strategy": cold_outreach_strategy,
+        "upsell_outreach_enabled": upsell_outreach_enabled,
+        "upsell_outreach_daily_limit": upsell_outreach_daily_limit,
+        "upsell_principal_csv_path": upsell_principal_csv_path,
+        "upsell_exclude_principals": upsell_exclude_principals,
         "combined_system_prompt": combined_system_prompt,
         "llm_service": llm_service,
     }
@@ -426,20 +455,34 @@ def _do_follow_up(ctx: dict[str, Any]) -> None:
     """Execute the flagged-email follow-up logic using an already-initialised context."""
     client = ctx["client"]
     days_threshold = ctx["days_threshold"]
+    follow_up_daily_limit = ctx["follow_up_daily_limit"]
     preferred_model = ctx["preferred_model"]
     salesforce_bcc = ctx["salesforce_bcc"]
     combined_system_prompt = ctx["combined_system_prompt"]
     llm_service = ctx["llm_service"]
 
+    t_start = time.time()
+
     # 1. Scrape Flagged
     print("\n" + "=" * 30 + "\n")
+    t_scrape = time.time()
     flagged_threads = run_scraper(mode="flagged")
+    print(f"[Timer] Scraping: {time.time() - t_scrape:.1f}s")
 
     if flagged_threads:
-        # 2. Process Active Flags
+        # 2. Filter
+        t_filter = time.time()
         print("\n--- Processing Active Flags ---")
-
         candidates = filter_threads_for_replies(flagged_threads, days_threshold)
+        print(f"[Timer] Filtering: {time.time() - t_filter:.1f}s")
+
+        # 3. Apply daily limit
+        if len(candidates) > follow_up_daily_limit:
+            print(f"  -> Daily limit: processing {follow_up_daily_limit} of {len(candidates)} candidates.")
+            candidates = candidates[:follow_up_daily_limit]
+
+        # 4. Generate replies and create drafts
+        t_replies = time.time()
         process_replies(
             candidates,
             client,
@@ -448,20 +491,11 @@ def _do_follow_up(ctx: dict[str, Any]) -> None:
             preferred_model=preferred_model,
             salesforce_bcc=salesforce_bcc,
         )
-
-        # Generate summaries only for threads that need replies (deduplicated)
-        print("\n" + "=" * 30 + "\n")
-        threads_needing_replies = []
-        seen_ids = set()
-        for item in candidates:
-            thread = item["thread"]
-            thread_id = id(thread)
-            if thread_id not in seen_ids:
-                seen_ids.add(thread_id)
-                threads_needing_replies.append(thread)
-        generate_thread_summaries(threads_needing_replies, llm_service, preferred_model)
+        print(f"[Timer] Replies + drafts: {time.time() - t_replies:.1f}s")
     else:
         print("No flagged threads found.")
+
+    print(f"\n[Timer] Follow-up total: {time.time() - t_start:.1f}s")
 
 
 def _do_cold_outreach(ctx: dict[str, Any]) -> None:
@@ -473,6 +507,7 @@ def _do_cold_outreach(ctx: dict[str, Any]) -> None:
     cold_outreach_enabled = ctx["cold_outreach_enabled"]
     cold_outreach_csv_path = ctx["cold_outreach_csv_path"]
     cold_outreach_daily_limit = ctx["cold_outreach_daily_limit"]
+    cold_outreach_strategy = ctx["cold_outreach_strategy"]
 
     if not cold_outreach_enabled:
         print("Cold outreach is disabled in configuration. Skipping.")
@@ -494,9 +529,51 @@ def _do_cold_outreach(ctx: dict[str, Any]) -> None:
                 csv_path=cold_outreach_csv_path,
                 daily_limit=cold_outreach_daily_limit,
                 salesforce_bcc=salesforce_bcc,
+                strategy=cold_outreach_strategy,
             )
     except Exception as e:
         print(f"Error during cold outreach: {e}")
+        traceback.print_exc()
+
+
+def _do_upsell_outreach(ctx: dict[str, Any]) -> None:
+    """Execute the upsell outreach logic using an already-initialised context."""
+    client = ctx["client"]
+    preferred_model = ctx["preferred_model"]
+    salesforce_bcc = ctx["salesforce_bcc"]
+    llm_service = ctx["llm_service"]
+    upsell_outreach_enabled = ctx["upsell_outreach_enabled"]
+    upsell_outreach_daily_limit = ctx["upsell_outreach_daily_limit"]
+    upsell_principal_csv_path = ctx["upsell_principal_csv_path"]
+    upsell_exclude_principals = ctx["upsell_exclude_principals"]
+    cold_outreach_csv_path = ctx["cold_outreach_csv_path"]
+
+    if not upsell_outreach_enabled:
+        print("Upsell outreach is disabled in configuration. Skipping.")
+        return
+
+    try:
+        upsell_prompt = ""
+        if os.path.exists(UPSELL_OUTREACH_PROMPT_PATH):
+            with open(UPSELL_OUTREACH_PROMPT_PATH, "r") as f:
+                upsell_prompt = f.read()
+        if not upsell_prompt:
+            print("Warning: Upsell outreach prompt is empty. Skipping upsell outreach.")
+            return
+
+        process_upsell_outreach(
+            client=client,
+            llm_service=llm_service,
+            upsell_prompt=upsell_prompt,
+            preferred_model=preferred_model,
+            salesforce_csv_path=cold_outreach_csv_path,
+            principal_csv_path=upsell_principal_csv_path,
+            daily_limit=upsell_outreach_daily_limit,
+            salesforce_bcc=salesforce_bcc,
+            exclude_principals=upsell_exclude_principals,
+        )
+    except Exception as e:
+        print(f"Error during upsell outreach: {e}")
         traceback.print_exc()
 
 
@@ -526,8 +603,87 @@ def run_cold_outreach() -> None:
         traceback.print_exc()
 
 
+def run_upsell_outreach() -> None:
+    """Run only the upsell outreach step."""
+    print("--- Outlook Bot: Upsell Outreach ---")
+    try:
+        ctx = _setup()
+        if ctx is None:
+            return
+        _do_upsell_outreach(ctx)
+    except Exception as e:
+        print(f"Error during execution: {e}")
+        traceback.print_exc()
+
+
+def run_test_prompt(email_file: str) -> None:
+    """Load a .txt email, generate a reply with the LLM, and create an Outlook draft."""
+    print("--- Outlook Bot: Test Prompt ---")
+    try:
+        if not email_file or not os.path.exists(email_file):
+            print(f"[Error] Email file not found: {email_file}")
+            return
+
+        with open(email_file, "r", encoding="utf-8") as f:
+            email_content = f.read()
+
+        if not email_content.strip():
+            print("[Error] Email file is empty.")
+            return
+
+        print(f"Loaded email from: {email_file}")
+        print(f"Content length: {len(email_content)} chars")
+
+        ctx = _setup()
+        if ctx is None:
+            return
+
+        llm_service = ctx["llm_service"]
+        preferred_model = ctx["preferred_model"]
+        combined_system_prompt = ctx["combined_system_prompt"]
+        client = ctx["client"]
+
+        # Generate reply via LLM
+        print("\nGenerating reply with LLM...")
+        reply_text = llm_service.generate_reply(email_content, combined_system_prompt, preferred_model=preferred_model)
+
+        if not reply_text:
+            print("[Error] LLM returned no reply.")
+            return
+
+        print("\n" + "#" * 30)
+        print("GENERATED REPLY:")
+        print("#" * 30)
+        print(reply_text)
+        print("#" * 30)
+
+        # Create draft in Outlook
+        subject = "Re: Test Prompt"
+        # Try to extract subject from email content
+        for line in email_content.splitlines():
+            if line.startswith("Subject: "):
+                subject = "Re: " + line[9:].strip()
+                break
+
+        formatted_reply = reply_text.replace("\n", "<br>")
+        client.create_draft("", subject, formatted_reply)
+        print("\n[Success] Draft created in Outlook.")
+
+        # Generate and print SF Note
+        print("\nGenerating SF Note...")
+        sf_note = llm_service.generate_sf_note(email_content, preferred_model=preferred_model)
+        if sf_note:
+            print(f"\n📋 SF Note:\n   {sf_note}\n")
+        else:
+            print("[Warning] Failed to generate SF Note.")
+
+    except Exception as e:
+        print(f"Error during execution: {e}")
+        traceback.print_exc()
+
+
 def main() -> None:
-    """Run both follow-up and cold outreach (original behaviour)."""
+    """Run follow-up, cold outreach, and upsell outreach."""
     print("--- Outlook Bot: Run All ---")
     try:
         ctx = _setup()
@@ -535,6 +691,7 @@ def main() -> None:
             return
         _do_follow_up(ctx)
         _do_cold_outreach(ctx)
+        _do_upsell_outreach(ctx)
     except Exception as e:
         print(f"Error during execution: {e}")
         traceback.print_exc()
@@ -547,12 +704,18 @@ if __name__ == "__main__":
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--follow-up", action="store_true")
     group.add_argument("--cold-outreach", action="store_true")
+    group.add_argument("--upsell-outreach", action="store_true")
     group.add_argument("--run-all", action="store_true")
+    group.add_argument("--test-prompt", type=str, metavar="FILE", help="Test prompt with a .txt email file")
     args = parser.parse_args()
 
     if args.follow_up:
         run_follow_up()
     elif args.cold_outreach:
         run_cold_outreach()
+    elif args.upsell_outreach:
+        run_upsell_outreach()
+    elif args.test_prompt:
+        run_test_prompt(args.test_prompt)
     else:
         main()

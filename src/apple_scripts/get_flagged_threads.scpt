@@ -1,17 +1,28 @@
 tell application "Microsoft Outlook"
 	set msgList to {}
-	set visitedIDs to {}
-	
-	-- 1. Find all flagged messages (Active only) -- Logic updated to filter in loop
-	-- We look in all folders or just key ones? Scanning all folders is slow.
-	-- Let's stick to the previous logic of scanning all folders to FIND the flags.
-	
-	set allFolders to every mail folder
-	set flaggedConversationIDs to {}
-	
-	repeat with currentFolder in allFolders
+	set visitedMsgIDs to {}
+
+	-- 1. Scan only key folders (not every folder) for flagged conversation IDs
+	set searchFolderNames to {"Inbox", "Sent Items", "Archive"}
+	set searchFolders to {}
+
+	repeat with fName in searchFolderNames
 		try
-			set foundMessages to (every message of currentFolder where todo flag is not not flagged)
+			set matchedFolders to (every mail folder where name is fName)
+			repeat with f in matchedFolders
+				set end of searchFolders to f
+			end repeat
+		on error
+			-- ignore missing folders
+		end try
+	end repeat
+
+	-- Collect flagged conversation IDs from these folders only
+	set flaggedConversationIDs to {}
+
+	repeat with f in searchFolders
+		try
+			set foundMessages to (every message of f where todo flag is not not flagged)
 			repeat with msg in foundMessages
 				try
 					if todo flag of msg is not completed then
@@ -28,74 +39,57 @@ tell application "Microsoft Outlook"
 			-- skip folder error
 		end try
 	end repeat
-	
-	-- 2. For each conversation ID, fetch ALL messages from key folders
-	-- Scanning EVERY folder for EVERY conversation is O(N*M) and too slow.
-	-- We will look in "Inbox", "Sent Items", "Archive"
-	set searchFolderNames to {"Inbox", "Sent Items", "Archive"}
-	set searchFolders to {}
-	
-	repeat with fName in searchFolderNames
-		try
-			set end of searchFolders to (every mail folder where name is fName)
-		on error
-			-- ignore missing folders
-		end try
-	end repeat
-	-- Flatten list if needed (AppleScript list handling is weird, but 'every mail folder' returns a list)
-	
+
+	-- 2. For each conversation ID, fetch messages from the same folders
+	--    Track visited message IDs to skip duplicates across folders
 	repeat with cID in flaggedConversationIDs
-		set threadMessages to {}
-		
-		-- Search in our target folders
-		-- Note: We have a list of lists of folders potentially, need to be careful
-		repeat with folderList in searchFolders
-			repeat with f in folderList
-				try
-					set foundMsgs to (every message of f where conversation id is cID)
-					set threadMessages to threadMessages & foundMsgs
-				on error
-					-- ignore
-				end try
-			end repeat
-		end repeat
-		
-		-- Also search inside the folder where we found the flag originally? 
-		-- actually, the above set covers the main ones.
-		
-		-- Process messages
-		repeat with msg in threadMessages
+		repeat with f in searchFolders
 			try
-				set msgSender to sender of msg
-				set senderAddress to address of msgSender
-				set senderName to name of msgSender
-				set msgSubject to subject of msg
-				set msgContent to plain text content of msg
-				set msgDate to time sent of msg
-				set msgID to id of msg -- internal ID to avoid duplicates?
-				
-				-- Check for duplicates? For now assume folders don't overlap messages much (except copies)
-				
-				set flagStatusRaw to todo flag of msg
-				set flagStatus to "None"
-				if flagStatusRaw is completed then
-					set flagStatus to "Completed"
-				else if flagStatusRaw is not not flagged then
-					set flagStatus to "Active"
-				end if
-				
-				set msgID to id of msg
-				
-				set entry to "ID: " & cID & "\n" & "MessageID: " & msgID & "\n" & "From: " & senderName & " <" & senderAddress & ">\n" & "Date: " & msgDate & "\n" & "Subject: " & msgSubject & "\n" & "FlagStatus: " & flagStatus & "\n" & "---BODY_START---\n" & msgContent & "\n---BODY_END---"
-				
-				set end of msgList to entry
-			on error errMsg
-				-- Ignore single message errors
+				set foundMsgs to (every message of f where conversation id is cID)
+				repeat with msg in foundMsgs
+					try
+						set msgID to id of msg
+
+						-- Skip duplicates
+						if msgID is in visitedMsgIDs then
+							-- already processed
+						else
+							set end of visitedMsgIDs to msgID
+
+							set msgSender to sender of msg
+							set senderAddress to address of msgSender
+							set senderName to name of msgSender
+							set msgSubject to subject of msg
+							set msgDate to time sent of msg
+
+							-- Truncate body to first 2000 chars to avoid IPC bloat
+							set msgContent to plain text content of msg
+							if (count of msgContent) > 2000 then
+								set msgContent to text 1 thru 2000 of msgContent
+							end if
+
+							set flagStatusRaw to todo flag of msg
+							set flagStatus to "None"
+							if flagStatusRaw is completed then
+								set flagStatus to "Completed"
+							else if flagStatusRaw is not not flagged then
+								set flagStatus to "Active"
+							end if
+
+							set entry to "ID: " & cID & "\n" & "MessageID: " & msgID & "\n" & "From: " & senderName & " <" & senderAddress & ">\n" & "Date: " & msgDate & "\n" & "Subject: " & msgSubject & "\n" & "FlagStatus: " & flagStatus & "\n" & "---BODY_START---\n" & msgContent & "\n---BODY_END---"
+
+							set end of msgList to entry
+						end if
+					on error errMsg
+						-- Ignore single message errors
+					end try
+				end repeat
+			on error
+				-- ignore folder query error
 			end try
 		end repeat
-		
 	end repeat
-	
+
 	set AppleScript's text item delimiters to "\n///END_OF_MESSAGE///\n"
 	return msgList as text
 end tell
