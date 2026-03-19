@@ -8,17 +8,64 @@ InvestorFlow is the leading industry cloud for alternative assets (PE, VC, real 
 
 ---
 
-## Known Clients & Partners
+## Known Clients (28 identified)
 
-| Client / Partner | Source |
+Full data in **investorflow-clients.csv** (same folder). Summary below:
+
+### Confirmed Clients — Testimonials & Press Releases
+
+| Company | Industry | Region | Key Contact | Discovery Method |
+|---|---|---|---|---|
+| Blackstone | PE / Alt Assets | New York, USA | William Murphy (CTO) | FundEngine co-developer (Cloud Theory) |
+| Kleiner Perkins | Venture Capital | Menlo Park, USA | Moustafa ElBialy (CIO) | Dreamforce 2023 keynote |
+| Ariel Alternatives | Private Equity | Chicago, USA | Lorenna Buck, Ph.D. (MD) | Website testimonial |
+| Verde Technology Ventures | PE / Portfolio Mgmt | — | Jeffrey Green (MD) | Website testimonial |
+| Alpha Alternatives | PE & Private Credit | — | Jonathan Balkin (Global Head) | AI press release |
+| M7 Real Estate | Real Estate (Pan-EU) | London, UK | — | Website testimonial |
+
+### Confirmed Clients — Via Coyote Software Acquisition (Apr 2024)
+
+| Company | Industry | Region |
+|---|---|---|
+| Nuveen | Real Estate / Asset Mgmt | Chicago, USA |
+| LGIM (Legal & General) | Asset Management | London, UK |
+| Royal London Asset Mgmt | Asset Management | London, UK |
+| Landsec | Real Estate (REIT) | London, UK |
+| Picton Property Income | Real Estate | London, UK |
+| Kames Capital (now abrdn) | Asset Management | Edinburgh, UK |
+| Tandem Property Asset Mgmt | Real Estate | London, UK |
+| Oxford Properties Group | Real Estate | Toronto, Canada |
+
+### Confirmed Clients — Subdomain / Portal Discovery
+
+These firms have active investor portals hosted at `*.investorflow.com`:
+
+| Company | Subdomain | Industry |
+|---|---|---|
+| Eschelon Advisors | eschelonadvisors.investorflow.com | Energy / PE (Houston) |
+| Related Companies | related.investorflow.com | Real Estate (NYC) |
+| Theorem (Partners) | theorem.investorflow.com | Alternative Assets |
+| Spring Bridge Partners | sbridgep.investorflow.com | Private Equity |
+| Search Fund Partners | searchfunds.investorflow.com | Search Funds / PE |
+| TIFF (Investment Fund for Foundations) | tiff.investorflow.com | Foundations / Endowments |
+| Recognize (Investment Mgmt) | recognize.investorflow.com | Alternative Assets |
+| E78 Partners / Tillman PES | tillmanpes.investorflow.com | Private Equity |
+
+### Likely Clients — Inferred
+
+| Company | Basis |
 |---|---|
-| Verde Technology Ventures | InvestorFlow website testimonial (Jeffrey Green, MD) |
-| Nuveen | Coyote Software acquisition press release |
-| LGIM (Legal & General Investment Management) | Coyote Software acquisition press release |
-| Royal London Asset Management | Coyote Software acquisition press release |
-| Alpha Alternatives | InvestorFlow AI press release (Jonathan Balkin, Global Head of PE & PC) |
-| West Monroe (consulting partner) | InvestorFlow case study |
-| Unnamed "Top PEI 300 Firm" | InvestorFlow case study (private wealth) |
+| Brookfield Asset Management | Ed Keenan (testimonial giver) was VP at Brookfield |
+| Cerberus Capital Management | Ed Keenan now Director at Cerberus |
+
+### Partners (not clients, but useful for network mapping)
+
+| Partner | Type |
+|---|---|
+| West Monroe | Implementation / Consulting |
+| Holland Mountain | Implementation / Consulting |
+| Lionpoint Group (Alpha Group) | Co-authored industry report |
+| Preqin | Technology / Data partner |
 
 ---
 
