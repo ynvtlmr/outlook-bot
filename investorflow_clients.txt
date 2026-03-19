@@ -108,3 +108,6 @@ M7 Real Estate,InvestorFlow Website Testimonial,,David Ebbrell (CEO) gave testim
 Nuveen,Coyote Acquisition Announcement,,Named as Coyote Software client (now InvestorFlow)
 Royal London Asset Management,Coyote Acquisition Announcement,,Named as Coyote Software client (now InvestorFlow)
 TPG,Press Release (PRNewswire 2024),,Named as client that relies on InvestorFlow
+Benefit Street Partners,InvestorFlow Case Study + Salesforce World Tour,,Centralizes single source of truth with InvestorFlow
+PGIM Real Estate,Press Release,,Named as example of giant asset managers using InvestorFlow
+Panattoni,LinkedIn Confirmation,,Onboarding to InvestorFlow completed in Germany; major logistics RE developer
