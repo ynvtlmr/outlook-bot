@@ -8,7 +8,7 @@ InvestorFlow is the leading industry cloud for alternative assets (PE, VC, real 
 
 ---
 
-## Known Clients (28 identified)
+## Known Clients (55+ identified)
 
 Full data in **investorflow-clients.csv** (same folder). Summary below:
 
@@ -36,7 +36,7 @@ Full data in **investorflow-clients.csv** (same folder). Summary below:
 | Tandem Property Asset Mgmt | Real Estate | London, UK |
 | Oxford Properties Group | Real Estate | Toronto, Canada |
 
-### Confirmed Clients — Subdomain / Portal Discovery
+### Confirmed Clients — Subdomain / Portal Discovery (Google-indexed)
 
 These firms have active investor portals hosted at `*.investorflow.com`:
 
@@ -50,6 +50,47 @@ These firms have active investor portals hosted at `*.investorflow.com`:
 | TIFF (Investment Fund for Foundations) | tiff.investorflow.com | Foundations / Endowments |
 | Recognize (Investment Mgmt) | recognize.investorflow.com | Alternative Assets |
 | E78 Partners / Tillman PES | tillmanpes.investorflow.com | Private Equity |
+
+### Confirmed Clients — Certificate Transparency (crt.sh) Deep Discovery
+
+SSL certificate transparency logs at `crt.sh/?q=%25.investorflow.com` revealed 30+ additional client subdomains:
+
+| Company | Subdomain | Industry | HQ | AUM/Scale |
+|---|---|---|---|---|
+| **L Catterton** | lcatterton.investorflow.com | Consumer PE (LVMH-backed) | Greenwich, CT | $37B equity |
+| **One Equity Partners** | oneequity.investorflow.com | Middle Market PE | New York | $10B+ AUM |
+| **Ridgemont Equity Partners** | ridgemontep.investorflow.com | Middle Market PE | Charlotte, NC | $11B+ capital |
+| **CAZ Investments** | caz.investorflow.com | Alt Assets / GP Stakes | Houston, TX | $11B+ deployed |
+| **Bernhard Capital Partners** | bernhardcapital.investorflow.com | Services & Infrastructure PE | Baton Rouge, LA | $3.4B AUM |
+| **Blue Wolf Capital Partners** | bluewolfcapital-irm.investorflow.com | Industrial / Healthcare PE | New York | $2.9B+ capital |
+| **Cabot Properties** | cabotprop.investorflow.com | Industrial / Logistics RE | Boston, MA | $17B+ invested |
+| **Lafayette Square** | lafayettesquare.investorflow.com | Private Credit / Impact | Miami, FL | — |
+| **Coral Tree Partners** | coraltreelp.investorflow.com | Media / Entertainment PE | Los Angeles, CA | $470M Fund I |
+| **Broad Sky Partners** | broadskypartners.investorflow.com | Business Services PE | New York | $335M fund |
+| **3 Rivers Capital** | 3riverscap.investorflow.com | Lower Middle Market PE | Pittsburgh, PA | — |
+| **Fenway Partners** | fenwaypartners.investorflow.com | Middle Market PE | New York | — |
+| **InterAlpen Partners** | interalpenpartners.investorflow.com | PE / Growth Equity | Omaha, NE | $125M+ |
+| **Panorama Point Partners** | panoramapoint.investorflow.com | PE / Growth Equity | Omaha, NE | $125M+ |
+| **Montgomery Street Partners** | montgomerystreetpartners.investorflow.com | Investment | San Francisco, CA | — |
+| **Structural Capital** | structuralcapital.investorflow.com | Venture Lending / Credit | San Francisco, CA | — |
+| **TMF Group (US)** | tmf-groupus.investorflow.com | Fund Administration | Amsterdam (global) | — |
+| **Medical Solutions** | medicalsolutions.investorflow.com | Healthcare Staffing | Omaha, NE | — |
+| **Carlton Senior Living** | carltonseniorliving.investorflow.com | Senior Living / Healthcare RE | — | — |
+| **Rock Hill Capital** | rockhillcap.investorflow.com | Lower Middle Market PE | Houston, TX | — |
+| **Atlas Sand (likely)** | atlassand.investorflow.com | Energy / Frac Sand | Austin, TX | — |
+| **Blue Atlantic Partners** | blueatlanticpartners.investorflow.com | PE / Investment | — | — |
+| **4x4 Capital** | 4x4capital.investorflow.com | PE / Investment | — | — |
+| **Key Real Estate Company** | keyrealestateco.investorflow.com | Real Estate | — | — |
+| **Sack Properties** | sackproperties.investorflow.com | Real Estate | — | — |
+| **Liberty Capital LP** | libertycapitallp.investorflow.com | Private Equity | — | — |
+| **New 2nd Capital** | new2ndcapital.investorflow.com | PE / Investment | — | — |
+| **Sage Hall Partners** | sagehallpartners.investorflow.com | PE / Investment | — | — |
+| **Zeno Partners** | zenopartners.investorflow.com | PE / Investment | — | — |
+| **Platform LLC** | platformllc.investorflow.com | Investment / PE | — | — |
+| **MEP Capital / Merit Capital** | mepcap.investorflow.com | Middle Market PE | Chicago, IL | — |
+| **Walcap** | walcap.investorflow.com | Likely Real Estate PE | — | — |
+
+**Unidentified subdomains** (need further research): `dccp`, `familyoffice`, `investco`, `liccar`, `mccp`, `moacap`, `omx`, `sfs`, `wfinv`, `broy`
 
 ### Likely Clients — Inferred
 
