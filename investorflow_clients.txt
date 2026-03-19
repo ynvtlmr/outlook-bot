@@ -34,7 +34,7 @@ Excelsior LLC,Certificate Transparency,excelsiorllc.investorflow.com,
 FGMK,Certificate Transparency,fgmk.investorflow.com,
 Fenway Partners,Certificate Transparency,fenwaypartners.investorflow.com,Middle-market PE
 FTS,Certificate Transparency,fts.investorflow.com,
-GA (possible General Atlantic),Certificate Transparency,ga.investorflow.com,Needs verification
+General Atlantic (GA),Certificate Transparency + Press Release,ga.investorflow.com,Confirmed via PRNewswire 2024 press release
 Gullane Capital,Certificate Transparency,gullanecapital.investorflow.com,
 Harbour View Equity,Certificate Transparency,harbourviewequity.investorflow.com,
 HC Global Fund Services,Certificate Transparency,hcglobalfs.investorflow.com,Fund administrator
@@ -99,3 +99,12 @@ WF Investments,Certificate Transparency,wfinv.investorflow.com,
 WMP LP,Certificate Transparency,wmplp.investorflow.com,
 Y Combinator,Certificate Transparency,ycombinator.investorflow.com,Top startup accelerator/VC
 Zeno Partners,Certificate Transparency,zenopartners.investorflow.com,
+Angelo Gordon (now TPG Angelo Gordon),Press Release (Private Funds CFO),,Named as client in Cloud Theory merger coverage
+Ariel Alternatives,InvestorFlow Website Testimonial,,Lorenna Buck (MD) gave testimonial
+Blackstone,Press Release / Strategic Investor,,Invested in Cloud Theory; FundEngine built with Blackstone Innovations
+KKR,Press Release (Private Funds CFO),,Named as client in Cloud Theory merger coverage
+LGIM (Legal & General Investment Management),Coyote Acquisition Announcement,,Named as Coyote Software client (now InvestorFlow)
+M7 Real Estate,InvestorFlow Website Testimonial,,David Ebbrell (CEO) gave testimonial; Coyote Software connection
+Nuveen,Coyote Acquisition Announcement,,Named as Coyote Software client (now InvestorFlow)
+Royal London Asset Management,Coyote Acquisition Announcement,,Named as Coyote Software client (now InvestorFlow)
+TPG,Press Release (PRNewswire 2024),,Named as client that relies on InvestorFlow
